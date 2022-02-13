@@ -76,7 +76,7 @@ static state_t compress_round(state_t state, ap_uint<32> rk, ap_uint<32> rw) {
     ap_uint<32> g = state.g;
     ap_uint<32> h = state.h;
 
-    ap_uint<32> sigma1 = Sigma0(e);
+    ap_uint<32> sigma1 = Sigma1(e);
     ap_uint<32> ch = Ch(e, f, g);
     ap_uint<32> tmp1 = h + sigma1 + ch + rk + rw;
     ap_uint<32> sigma0 = Sigma0(a);
