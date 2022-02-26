@@ -40,3 +40,16 @@ target_link_libraries(
 
 include(GoogleTest)
 gtest_discover_tests(sha256_test)
+
+set(FREQ 250)
+set(SYNTH_DIRECTIVE areaoptimized_high)
+
+function(add_vitis_hls_target name freq synth_directive)
+  add_custom_command(OUTPUT ${name}/${name}_f${freq}/syn/report/csynth.rpt COMMAND vitis_hls -f ../scripts/csynth.tcl ${name} ${freq})
+  add_custom_command(OUTPUT ${name}/${name}_f${freq}/impl/export.zip COMMAND vitis_hls -f ../scripts/export.tcl ${name} ${freq} DEPENDS ${name}/${name}_f${freq}/syn/report/csynth.rpt)
+  add_custom_target(csynth_${name}_f${freq} DEPENDS ${name}/${name}_f${freq}/syn/report/csynth.rpt)
+  add_custom_target(export_${name}_f${freq} DEPENDS ${name}/${name}_f${freq}/impl/export.zip)
+endfunction()
+
+add_vitis_hls_target(sha256 ${FREQ} ${SYNTH_DIRECTIVE})
+add_vitis_hls_target(hashes_iter ${FREQ} ${SYNTH_DIRECTIVE})
