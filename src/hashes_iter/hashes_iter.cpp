@@ -1,15 +1,7 @@
 #include "ap_axi_sdata.h"
+#include "hashes_iter.h"
 #include "hls_stream.h"
 
-#define XDMA_AXIS_WIDTH 512
-#define HASH_SIZE 256
-#define NUM_ITERS_SIZE 64
-#define IN_PKT_SIZE (HASH_SIZE + NUM_ITERS_SIZE)
-// The number of parallel input packets in the processing pipeline. Its product with IN_PKT_SIZE must be
-// evenly divisible by XDMA_AXIS_WIDTH.
-#define IN_PKT_PAR 8
-
-typedef ap_axiu<XDMA_AXIS_WIDTH, 1, 1, 1> xdma_axis_t;
 typedef ap_axiu<IN_PKT_SIZE, 1, 1, 1> in_pkt_t;
 // typedef ap_axiu<2 * HASH_SIZE, 1, 1, 1> out_pkt_t;
 
@@ -39,62 +31,64 @@ in_pkt_ctrl_t to_in_pkt_ctrl(in_pkt_t in_pkt) {
 }
 
 void in_pkts_par(hls::stream<xdma_axis_t> &in_words,
-                 hls::stream<in_pkt_ctrl_t> &in_pkt_ctrls_par[IN_PKT_PAR]) {
-    for (unsigned batch = 0; batch < IN_PKT_PAR / 8; batch++) {
+                 hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR]) {
+    xdma_axis_t word;
+    do {
+        for (unsigned batch = 0; batch < IN_PKT_PAR / 8; batch++) {
 #pragma HLS pipeline
-        in_pkt_t in_pkt;
-        xdma_axis_t word;
-        unsigned i = batch * 8;
+            in_pkt_t in_pkt;
+            unsigned i = batch * 8;
 
-        // Packet 0
-        word = in_words.read();
-        in_pkt.data = word.data(0, 319);
-        in_pkt_ctrls_par[i].write(in_pkt);
-        if (word.last) break;
+            // Packet 0
+            word = in_words.read();
+            in_pkt.data = word.data(0, 319);
+            in_pkt_ctrls_par[i].write(to_in_pkt_ctrl(in_pkt));
+            if (word.last) break;
 
-        // Packet 1
-        in_pkt.data(0, 191) = word.data(320, 511);
-        word = in_words.read();
-        in_pkt.data(192, 319) = word.data(0, 127);
-        in_pkt_ctrls_par[i + 1].write(to_in_pkt_ctrl(in_pkt));
-        if (word.last) break;
+            // Packet 1
+            in_pkt.data(0, 191) = word.data(320, 511);
+            word = in_words.read();
+            in_pkt.data(192, 319) = word.data(0, 127);
+            in_pkt_ctrls_par[i + 1].write(to_in_pkt_ctrl(in_pkt));
+            if (word.last) break;
 
-        // Packet 2
-        in_pkt.data = word.data(128, 447);
-        in_pkt_ctrls_par[i + 2].write(to_in_pkt_ctrl(in_pkt));
-        if (word.last) break;
+            // Packet 2
+            in_pkt.data = word.data(128, 447);
+            in_pkt_ctrls_par[i + 2].write(to_in_pkt_ctrl(in_pkt));
+            if (word.last) break;
 
-        // Packet 3
-        in_pkt.data(0, 63) = word.data(448, 511);
-        word = in_words.read();
-        in_pkt.data(64, 319) = word.data(0, 255);
-        in_pkt_ctrls_par[i + 3].write(to_in_pkt_ctrl(in_pkt));
-        if (word.last) break;
+            // Packet 3
+            in_pkt.data(0, 63) = word.data(448, 511);
+            word = in_words.read();
+            in_pkt.data(64, 319) = word.data(0, 255);
+            in_pkt_ctrls_par[i + 3].write(to_in_pkt_ctrl(in_pkt));
+            if (word.last) break;
 
-        // Packet 4
-        in_pkt.data(0, 255) = word.data(256, 511);
-        word = in_words.read();
-        in_pkt.data(256, 319) = word.data(0, 63);
-        in_pkt_ctrls_par[i + 4].write(to_in_pkt_ctrl(in_pkt));
-        if (word.last) break;
+            // Packet 4
+            in_pkt.data(0, 255) = word.data(256, 511);
+            word = in_words.read();
+            in_pkt.data(256, 319) = word.data(0, 63);
+            in_pkt_ctrls_par[i + 4].write(to_in_pkt_ctrl(in_pkt));
+            if (word.last) break;
 
-        // Packet 5
-        in_pkt.data = word.data(64, 383);
-        in_pkt_ctrls_par[i + 5].write(to_in_pkt_ctrl(in_pkt));
-        if (word.last) break;
+            // Packet 5
+            in_pkt.data = word.data(64, 383);
+            in_pkt_ctrls_par[i + 5].write(to_in_pkt_ctrl(in_pkt));
+            if (word.last) break;
 
-        // Packet 6
-        in_pkt.data(0, 127) = word.data(384, 511);
-        word = in_words.read();
-        in_pkt.data(128, 319) = word.data(0, 191);
-        in_pkt_ctrls_par[i + 6].write(to_in_pkt_ctrl(in_pkt));
-        if (word.last) break;
+            // Packet 6
+            in_pkt.data(0, 127) = word.data(384, 511);
+            word = in_words.read();
+            in_pkt.data(128, 319) = word.data(0, 191);
+            in_pkt_ctrls_par[i + 6].write(to_in_pkt_ctrl(in_pkt));
+            if (word.last) break;
 
-        // Packet 7
-        in_pkt.data = word.data(192, 511);
-        in_pkt_ctrls_par[i + 7].write(to_in_pkt_ctrl(in_pkt));
-        if (word.last) break;
-    }
+            // Packet 7
+            in_pkt.data = word.data(192, 511);
+            in_pkt_ctrls_par[i + 7].write(to_in_pkt_ctrl(in_pkt));
+            if (word.last) break;
+        }
+    } while (!word.last);
 
     in_pkt_ctrl_t terminator = {0, 0, 1};
     // in_pkt_ctrl.hash = 0;
@@ -102,6 +96,8 @@ void in_pkts_par(hls::stream<xdma_axis_t> &in_words,
     // in_pkt_ctrl.terminator = 1;
     // Terminate all stream processing tasks.
     for (unsigned i = 0; i < IN_PKT_PAR; i++) {
+#pragma HLS unroll
+        // TODO: wait on busy streams.
         in_pkt_ctrls_par[i].write(terminator);
     }
 }
@@ -109,8 +105,9 @@ void in_pkts_par(hls::stream<xdma_axis_t> &in_words,
 void hash_iter_pkts(hls::stream<in_pkt_ctrl_t> &in_pkt_ctrls,
                     hls::stream<xdma_axis_t> &out_pkts) {
     in_pkt_ctrl_t in_pkt_ctrl;
-    while ((in_pkt_ctrl = in_pkt_ctrls.read()); in_pkt_ctrl.terminator == 0) {
-// #pragma HLS pipeline
+    for (in_pkt_ctrl = in_pkt_ctrls.read();
+         in_pkt_ctrl.terminator == 0;
+         in_pkt_ctrl = in_pkt_ctrls.read()) {
 // #pragma HLS unroll factor=64 skip_exit_check
         ap_uint<HASH_SIZE> in_hash = in_pkt_ctrl.hash;
         ap_uint<HASH_SIZE> out_hash = dummy_hash_iter(in_hash, in_pkt_ctrl.num_iters);
@@ -123,23 +120,34 @@ void hash_iter_pkts(hls::stream<in_pkt_ctrl_t> &in_pkt_ctrls,
     }
 }
 
-void hash_iter_pkts_par(hls::stream<in_pkt_ctrl_t> &in_pkt_ctrls_par[IN_PKT_PAR],
+void hash_iter_pkts_par(hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR],
                         hls::stream<xdma_axis_t> &out_pkts) {
     for (unsigned i = 0; i < IN_PKT_PAR; i++) {
+#pragma HLS unroll
         hash_iter_pkts(in_pkt_ctrls_par[i], out_pkts);
     }
 }
 
-void hashes_iter(hls::stream<xdma_axis_t> &in_words,
-                 hls::stream<xdma_axis_t> &out_words) {
-#pragma HLS interface axis port=in_words
-#pragma HLS interface axis port=out_words
-#pragma HLS interface s_axilite port=return bundle=control
-#pragma HLS dataflow
-
+void pkts_dataflow(hls::stream<xdma_axis_t> &in_words,
+                   hls::stream<xdma_axis_t> &out_words) {
     hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR];
+#pragma HLS stream variable=in_pkt_ctrls_par type=fifo depth=4
+#pragma HLS dataflow
     in_pkts_par(in_words, in_pkt_ctrls_par);
     hash_iter_pkts_par(in_pkt_ctrls_par, out_words);
+}
+
+void hashes_iter(hls::stream<xdma_axis_t> &in_words,
+                 hls::stream<xdma_axis_t> &out_words,
+                 ap_uint<256> *gmem) {
+#pragma HLS interface axis port=in_words
+#pragma HLS interface axis port=out_words
+#pragma HLS interface m_axi port=gmem
+#pragma HLS interface s_axilite port=return bundle=control
+
+    pkts_dataflow(in_words, out_words);
 
     // TODO: termination of the output stream
+
+    gmem[0] = 0xc0ffee;
 }

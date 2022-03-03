@@ -33,16 +33,29 @@ add_executable(
   ./src/sha256/sha256.cpp
 )
 
+add_executable(
+  hashes_iter_test
+  ./test/hashes_iter_test.cpp
+  ./src/hashes_iter/hashes_iter.cpp
+)
+
 target_link_libraries(
   sha256_test
   gtest_main
 )
 
+target_link_libraries(
+  hashes_iter_test
+  gtest_main
+)
+
 include(GoogleTest)
 gtest_discover_tests(sha256_test)
+gtest_discover_tests(hashes_iter_test)
 
 set(FREQ 250)
 set(SYNTH_DIRECTIVE areaoptimized_high)
+# set(PAR_HASHES 1024)
 
 function(add_vitis_hls_target name freq synth_directive)
   add_custom_command(OUTPUT ${name}/${name}_f${freq}/syn/report/csynth.rpt COMMAND vitis_hls -f ../scripts/csynth.tcl ${name} ${freq})
