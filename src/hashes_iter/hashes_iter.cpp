@@ -18,9 +18,10 @@ typedef struct {
 } in_pkt_ctrl_t;
 
 ap_uint<HASH_SIZE> dummy_hash_iter(ap_uint<HASH_SIZE> hash, ap_uint<NUM_ITERS_SIZE> num_iters) {
-    for (ap_uint<NUM_ITERS_SIZE> i = 0; i < num_iters; i++) {
-        hash = hash + hash;
-    }
+    std::cout << "dummy_hash_iter("
+              << hash.to_string(16, true).c_str() << ", "
+              << num_iters.to_string(16, true).c_str() << ")" << std::endl;
+    hash = hash * num_iters;
     return hash;
 }
 
@@ -28,9 +29,6 @@ in_pkt_ctrl_t to_in_pkt_ctrl(in_pkt_t in_pkt) {
     in_pkt_ctrl_t in_pkt_ctrl;
     in_pkt_ctrl.hash = in_pkt.data(HASH_SIZE - 1 + NUM_ITERS_SIZE, NUM_ITERS_SIZE);
     in_pkt_ctrl.num_iters = in_pkt.data(NUM_ITERS_SIZE - 1, 0);
-    std::cout <<
-        in_pkt_ctrl.hash.to_string(16, true).c_str() << " x " <<
-        in_pkt_ctrl.num_iters.to_string(16, true).c_str() << std::endl;
     return in_pkt_ctrl;
 }
 
@@ -43,51 +41,51 @@ void demux_in_pkts(hls::stream<xdma_axis_t> &in_words,
         in_pkt_t in_pkt;
         unsigned i = batch * 8;
 
-        for (unsigned j = 0; j < 5; j++) {
-            word = in_words.read();
-            std::cout << word.data.to_string(16, true).c_str() << std::endl;
-        }
+        // for (unsigned j = 0; j < 5; j++) {
+        //     word = in_words.read();
+        //     std::cout << word.data.to_string(16, true).c_str() << std::endl;
+        // }
 
-        // // Packet 0
-        // word = in_words.read();
-        // in_pkt.data = word.data(511, 192);
-        // in_pkt_ctrls_par[i].write(to_in_pkt_ctrl(in_pkt));
+        // Packet 0
+        word = in_words.read();
+        in_pkt.data = word.data(511, 192);
+        in_pkt_ctrls_par[i].write(to_in_pkt_ctrl(in_pkt));
 
-        // // Packet 1
-        // in_pkt.data(319, 128) = word.data(191, 0);
-        // word = in_words.read();
-        // in_pkt.data(127, 0) = word.data(511, 384);
-        // in_pkt_ctrls_par[i + 1].write(to_in_pkt_ctrl(in_pkt));
+        // Packet 1
+        in_pkt.data(319, 128) = word.data(191, 0);
+        word = in_words.read();
+        in_pkt.data(127, 0) = word.data(511, 384);
+        in_pkt_ctrls_par[i + 1].write(to_in_pkt_ctrl(in_pkt));
 
-        // // Packet 2
-        // in_pkt.data = word.data(383, 64);
-        // in_pkt_ctrls_par[i + 2].write(to_in_pkt_ctrl(in_pkt));
+        // Packet 2
+        in_pkt.data = word.data(383, 64);
+        in_pkt_ctrls_par[i + 2].write(to_in_pkt_ctrl(in_pkt));
 
-        // // Packet 3
-        // in_pkt.data(319, 256) = word.data(63, 0);
-        // word = in_words.read();
-        // in_pkt.data(255, 0) = word.data(511, 256);
-        // in_pkt_ctrls_par[i + 3].write(to_in_pkt_ctrl(in_pkt));
+        // Packet 3
+        in_pkt.data(319, 256) = word.data(63, 0);
+        word = in_words.read();
+        in_pkt.data(255, 0) = word.data(511, 256);
+        in_pkt_ctrls_par[i + 3].write(to_in_pkt_ctrl(in_pkt));
 
-        // // Packet 4
-        // in_pkt.data(319, 64) = word.data(255, 0);
-        // word = in_words.read();
-        // in_pkt.data(63, 0) = word.data(511, 448);
-        // in_pkt_ctrls_par[i + 4].write(to_in_pkt_ctrl(in_pkt));
+        // Packet 4
+        in_pkt.data(319, 64) = word.data(255, 0);
+        word = in_words.read();
+        in_pkt.data(63, 0) = word.data(511, 448);
+        in_pkt_ctrls_par[i + 4].write(to_in_pkt_ctrl(in_pkt));
 
-        // // Packet 5
-        // in_pkt.data = word.data(447, 128);
-        // in_pkt_ctrls_par[i + 5].write(to_in_pkt_ctrl(in_pkt));
+        // Packet 5
+        in_pkt.data = word.data(447, 128);
+        in_pkt_ctrls_par[i + 5].write(to_in_pkt_ctrl(in_pkt));
 
-        // // Packet 6
-        // in_pkt.data(319, 192) = word.data(127, 0);
-        // word = in_words.read();
-        // in_pkt.data(191, 0) = word.data(511, 320);
-        // in_pkt_ctrls_par[i + 6].write(to_in_pkt_ctrl(in_pkt));
+        // Packet 6
+        in_pkt.data(319, 192) = word.data(127, 0);
+        word = in_words.read();
+        in_pkt.data(191, 0) = word.data(511, 320);
+        in_pkt_ctrls_par[i + 6].write(to_in_pkt_ctrl(in_pkt));
 
-        // // Packet 7
-        // in_pkt.data = word.data(319, 0);
-        // in_pkt_ctrls_par[i + 7].write(to_in_pkt_ctrl(in_pkt));
+        // Packet 7
+        in_pkt.data = word.data(319, 0);
+        in_pkt_ctrls_par[i + 7].write(to_in_pkt_ctrl(in_pkt));
     }
 
 //     in_pkt_ctrl_t terminator = {0, 0, 1};
@@ -110,7 +108,7 @@ void hash_iter_pkts(hls::stream<in_pkt_ctrl_t> &in_pkt_ctrls,
     ap_uint<HASH_SIZE> out_hash = dummy_hash_iter(in_hash, in_pkt_ctrl.num_iters);
 
     xdma_axis_t out_pkt;
-    out_pkt.data(2 * HASH_SIZE - 1, HASH_SIZE) = in_hash;
+    out_pkt.data(XDMA_AXIS_WIDTH - 1, HASH_SIZE) = in_hash;
     out_pkt.data(HASH_SIZE - 1, 0) = out_hash;
 
     out_pkts.write(out_pkt);
