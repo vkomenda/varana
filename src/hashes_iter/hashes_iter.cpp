@@ -1,4 +1,7 @@
+#ifndef __SYNTHESIS__
 #include <iostream>
+#endif
+
 #include "ap_axi_sdata.h"
 #include "hashes_iter.h"
 #include "hls_stream.h"
@@ -17,10 +20,47 @@ typedef struct {
     ap_uint<1> terminator;
 } in_pkt_ctrl_t;
 
+// typedef struct {
+//     // Cells contain either a free task number or -1 indicating that the cell is empty.
+//     ap_int<IN_PKT_PAR_BITS + 1> cells[IN_PKT_PAR];
+//     // Read cell index. Negative values mean "undefined".
+//     ap_int<IN_PKT_PAR_BITS + 1> read_pos;
+//     // Write cell index. Negative values mean "undefined".
+//     ap_int<IN_PKT_PAR_BITS + 1> write_pos;
+// } task_fifo_t;
+
+// static task_fifo_t task_fifo;
+// // RAW - read after write
+// #pragma HLS dependence variable=task_fifo inter RAW false
+// // RAM_S2P - A dual-port RAM that allows read operations on one port and write operations on the other port.
+// // URAM - UltraRAM
+// #pragma HLS bind_storage variable=task_fifo type=ram_s2p impl=uram
+
+// ap_int<IN_PKT_PAR_BITS + 1> read_task_fifo() {
+//     ap_int<IN_PKT_PAR_BITS + 1> read_pos = task_fifo.read_pos;
+//     if (task_fifo.read_pos < 0) {
+//         return -1;
+//     }
+//     ap_int<IN_PKT_PAR_BITS + 1> v = task_fifo.cells[read_pos];
+//     task_fifo.cells[read_pos] = -1;
+//     ap_int<IN_PKT_PAR_BITS + 2> next_read_pos = (read_pos + 1) % IN_PKT_PAR;
+//     if (task_fifo.cells[next_read_pos] >= 0) {
+//         task_fifo.read_pos = next_read_pos;
+//     } else {
+//         task_fifo.read_pos = -1;
+//     }
+//     if (task_fifo.write_pos < 0) {
+//         task_fifo.write_pos = read_pos;
+//     }
+//     return v;
+// }
+
 ap_uint<HASH_SIZE> dummy_hash_iter(ap_uint<HASH_SIZE> hash, ap_uint<NUM_ITERS_SIZE> num_iters) {
+#ifndef __SYNTHESIS__
     std::cout << "dummy_hash_iter("
               << hash.to_string(16, true).c_str() << ", "
               << num_iters.to_string(16, true).c_str() << ")" << std::endl;
+#endif
     hash = hash * num_iters;
     return hash;
 }
@@ -158,10 +198,11 @@ void pkts_dataflow(hls::stream<xdma_axis_t> &in_words,
                    hls::stream<xdma_axis_t> &out_words,
                    ap_uint<256> *gmem) {
     hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR];
-    hls::stream<xdma_axis_t> out_pkts_par[IN_PKT_PAR];
 #pragma HLS stream variable=in_pkt_ctrls_par type=fifo depth=4
+    hls::stream<xdma_axis_t> out_pkts_par[IN_PKT_PAR];
 #pragma HLS stream variable=out_pkts_par type=fifo depth=4
 #pragma HLS dataflow
+
     demux_in_pkts(in_words, in_pkt_ctrls_par);
     hash_iter_pkts_par(in_pkt_ctrls_par, out_pkts_par);
     mux_out_pkts(out_pkts_par, out_words, gmem);
@@ -176,9 +217,10 @@ void hashes_iter(hls::stream<xdma_axis_t> &in_words,
 #pragma HLS interface ap_ctrl_none port=return
     // #pragma HLS interface s_axilite port=return bundle=control
 
+    // Free-running kernel.
+    // while (1) {
     pkts_dataflow(in_words, out_words, gmem);
+    // }
 
     // TODO: termination of the output stream
-
-    // gmem[0] = 0xc0ffee;
 }

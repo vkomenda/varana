@@ -11,6 +11,7 @@
 // The number of parallel input packets in the processing pipeline. Its product with IN_PKT_SIZE must be
 // evenly divisible by XDMA_AXIS_WIDTH.
 #define IN_PKT_PAR 64
+#define IN_PKT_PAR_BITS 6
 
 typedef ap_axiu<XDMA_AXIS_WIDTH, 0, 0, 0> xdma_axis_t;
 
