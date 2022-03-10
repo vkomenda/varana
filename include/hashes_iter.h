@@ -16,5 +16,8 @@
 typedef ap_axiu<XDMA_AXIS_WIDTH, 0, 0, 0> xdma_axis_t;
 
 extern void hashes_iter(hls::stream<xdma_axis_t> &in_words,
-                        hls::stream<xdma_axis_t> &out_words,
-                        ap_uint<256> *gmem);
+                        hls::stream<xdma_axis_t> &out_words);
+
+#ifndef __SYNTHESIS__
+extern bool is_task_fifo_ready();
+#endif

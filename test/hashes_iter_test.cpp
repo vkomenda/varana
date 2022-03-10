@@ -89,20 +89,21 @@ TEST(HashesIter, MuxInPkts) {
                         NUM_ITERS);
 }
 
-TEST(HashesIter, TestPackets) {
+TEST(HashesIter, TestPacketsComplete) {
     hls::stream<xdma_axis_t> in_words, out_words;
-    ap_uint<256> *gmem;
     ap_uint<IN_PKT_SIZE> in_pkts[NUM_PKTS];
 
     // Initialize in_pkts.
     for (unsigned i = 0; i < NUM_PKTS; i++) {
         in_pkts[i](IN_PKT_SIZE - 1, NUM_ITERS_SIZE) = i + 1;
-        in_pkts[i](NUM_ITERS_SIZE - 1, 0) = NUM_ITERS;
+        in_pkts[i](NUM_ITERS_SIZE - 1, 0) = i;
         std::cout << in_pkts[i].to_string(16, true).c_str() << std::endl;
     }
 
+    std::cout << "Task fifo ready? " << is_task_fifo_ready() << std::endl;
+
     mux_in_pkts(in_pkts, in_words);
-    hashes_iter(in_words, out_words, gmem);
+    hashes_iter(in_words, out_words);
 
     for (unsigned i = 0; i < NUM_PKTS; i++) {
         xdma_axis_t word = out_words.read();
@@ -111,8 +112,45 @@ TEST(HashesIter, TestPackets) {
         computed_hash = word.data(255, 0);
         // std::cout << start_hash << ", " << computed_hash << std::endl;
         EXPECT_PRED_FORMAT2(AssertEqHex, start_hash, ap_uint<256>(i + 1));
-        EXPECT_PRED_FORMAT2(AssertEqHex, computed_hash, ap_uint<256>(start_hash * NUM_ITERS));
+        ap_uint<256> expected_hash = start_hash;
+        for (unsigned j = 0; j < i; j++) {
+            expected_hash = expected_hash + expected_hash;
+        }
+        EXPECT_PRED_FORMAT2(AssertEqHex, computed_hash, expected_hash);
+    }
+    // std::cout << "Famous last word " << in_words.read().data.to_string(16, true).c_str() << std::endl;
+}
+
+TEST(HashesIter, TestPacketsFourHalfStreams) {
+    hls::stream<xdma_axis_t> in_words, out_words;
+    ap_uint<IN_PKT_SIZE> in_pkts[NUM_PKTS];
+
+
+    for (unsigned pass = 0; pass < 2; pass++) {
+        // Initialize in_pkts.
+        for (unsigned i = 0; i < NUM_PKTS / 2; i++) {
+            in_pkts[i](IN_PKT_SIZE - 1, NUM_ITERS_SIZE) = i + 1;
+            in_pkts[i](NUM_ITERS_SIZE - 1, 0) = i;
+            std::cout << in_pkts[i].to_string(16, true).c_str() << std::endl;
+        }
+        std::cout << "Task fifo ready? " << is_task_fifo_ready() << std::endl;
+
+        mux_in_pkts(in_pkts, in_words);
+        hashes_iter(in_words, out_words);
     }
 
-    // ASSERT_EQ(gmem[0], ap_uint<256>(0xc0ffee));
+    for (unsigned i = 0; i < NUM_PKTS; i++) {
+        xdma_axis_t word = out_words.read();
+        ap_uint<256> start_hash, computed_hash;
+        start_hash = word.data(511, 256);
+        computed_hash = word.data(255, 0);
+        // std::cout << start_hash << ", " << computed_hash << std::endl;
+        EXPECT_PRED_FORMAT2(AssertEqHex, start_hash, ap_uint<256>(i + 1));
+        ap_uint<256> expected_hash = start_hash;
+        for (unsigned j = 0; j < i; j++) {
+            expected_hash = expected_hash + expected_hash;
+        }
+        EXPECT_PRED_FORMAT2(AssertEqHex, computed_hash, expected_hash);
+    }
+    // std::cout << "Famous last word " << in_words.read().data.to_string(16, true).c_str() << std::endl;
 }

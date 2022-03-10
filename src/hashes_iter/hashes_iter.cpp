@@ -5,6 +5,7 @@
 #include "ap_axi_sdata.h"
 #include "hashes_iter.h"
 #include "hls_stream.h"
+#include "sha256.h"
 
 typedef ap_axiu<IN_PKT_SIZE, 0, 0, 0> in_pkt_t;
 // typedef ap_axiu<2 * HASH_SIZE, 1, 1, 1> out_pkt_t;
@@ -28,6 +29,13 @@ typedef struct {
 //     // Write cell index. Negative values mean "undefined".
 //     ap_int<IN_PKT_PAR_BITS + 1> write_pos;
 // } task_fifo_t;
+
+// The queue of available tasks.
+static hls::stream<unsigned> task_fifo;
+// In the first iteration through all tasks, the queue is not initialised yet. At the end of each
+// run, every task announces its availabilty by appending its index to the queue. Therefore at the
+// end of the first iteration the queue becomes initialised and `task_fifo_ready` latches to `true`.
+static bool task_fifo_ready = false;
 
 // static task_fifo_t task_fifo;
 // // RAW - read after write
@@ -61,15 +69,27 @@ ap_uint<HASH_SIZE> dummy_hash_iter(ap_uint<HASH_SIZE> hash, ap_uint<NUM_ITERS_SI
               << hash.to_string(16, true).c_str() << ", "
               << num_iters.to_string(16, true).c_str() << ")" << std::endl;
 #endif
-    hash = hash * num_iters;
+    for (unsigned i = 0; i < num_iters; i++) {
+        hash = hash + hash;
+    }
     return hash;
 }
 
-in_pkt_ctrl_t to_in_pkt_ctrl(in_pkt_t in_pkt) {
+in_pkt_ctrl_t to_in_pkt_ctrl(in_pkt_t &in_pkt) {
     in_pkt_ctrl_t in_pkt_ctrl;
     in_pkt_ctrl.hash = in_pkt.data(HASH_SIZE - 1 + NUM_ITERS_SIZE, NUM_ITERS_SIZE);
     in_pkt_ctrl.num_iters = in_pkt.data(NUM_ITERS_SIZE - 1, 0);
     return in_pkt_ctrl;
+}
+
+void submit_pkt(hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR], in_pkt_t &in_pkt, unsigned seq_index) {
+    unsigned task_index;
+    if (task_fifo_ready) {
+        task_index = task_fifo.read();
+    } else {
+        task_index = seq_index;
+    }
+    in_pkt_ctrls_par[task_index].write(to_in_pkt_ctrl(in_pkt));
 }
 
 void demux_in_pkts(hls::stream<xdma_axis_t> &in_words,
@@ -89,44 +109,47 @@ void demux_in_pkts(hls::stream<xdma_axis_t> &in_words,
         // Packet 0
         word = in_words.read();
         in_pkt.data = word.data(511, 192);
-        in_pkt_ctrls_par[i].write(to_in_pkt_ctrl(in_pkt));
+        submit_pkt(in_pkt_ctrls_par, in_pkt, i);
 
         // Packet 1
         in_pkt.data(319, 128) = word.data(191, 0);
         word = in_words.read();
         in_pkt.data(127, 0) = word.data(511, 384);
-        in_pkt_ctrls_par[i + 1].write(to_in_pkt_ctrl(in_pkt));
+        submit_pkt(in_pkt_ctrls_par, in_pkt, i + 1);
 
         // Packet 2
         in_pkt.data = word.data(383, 64);
-        in_pkt_ctrls_par[i + 2].write(to_in_pkt_ctrl(in_pkt));
+        submit_pkt(in_pkt_ctrls_par, in_pkt, i + 2);
 
         // Packet 3
         in_pkt.data(319, 256) = word.data(63, 0);
         word = in_words.read();
         in_pkt.data(255, 0) = word.data(511, 256);
-        in_pkt_ctrls_par[i + 3].write(to_in_pkt_ctrl(in_pkt));
+        submit_pkt(in_pkt_ctrls_par, in_pkt, i + 3);
 
         // Packet 4
         in_pkt.data(319, 64) = word.data(255, 0);
         word = in_words.read();
         in_pkt.data(63, 0) = word.data(511, 448);
-        in_pkt_ctrls_par[i + 4].write(to_in_pkt_ctrl(in_pkt));
+        submit_pkt(in_pkt_ctrls_par, in_pkt, i + 4);
 
         // Packet 5
         in_pkt.data = word.data(447, 128);
-        in_pkt_ctrls_par[i + 5].write(to_in_pkt_ctrl(in_pkt));
+        submit_pkt(in_pkt_ctrls_par, in_pkt, i + 5);
 
         // Packet 6
         in_pkt.data(319, 192) = word.data(127, 0);
         word = in_words.read();
         in_pkt.data(191, 0) = word.data(511, 320);
-        in_pkt_ctrls_par[i + 6].write(to_in_pkt_ctrl(in_pkt));
+        submit_pkt(in_pkt_ctrls_par, in_pkt, i + 6);
 
         // Packet 7
         in_pkt.data = word.data(319, 0);
-        in_pkt_ctrls_par[i + 7].write(to_in_pkt_ctrl(in_pkt));
+        submit_pkt(in_pkt_ctrls_par, in_pkt, i + 7);
     }
+
+    // Take available tasks from the fifo on the next iteration.
+    task_fifo_ready = true;
 
 //     in_pkt_ctrl_t terminator = {0, 0, 1};
 //     // in_pkt_ctrl.hash = 0;
@@ -142,7 +165,8 @@ void demux_in_pkts(hls::stream<xdma_axis_t> &in_words,
 
 // TODO: convert to free-running
 void hash_iter_pkts(hls::stream<in_pkt_ctrl_t> &in_pkt_ctrls,
-                    hls::stream<xdma_axis_t> &out_pkts) {
+                    hls::stream<xdma_axis_t> &out_pkts,
+                    unsigned task_index) {
     in_pkt_ctrl_t in_pkt_ctrl = in_pkt_ctrls.read();
     ap_uint<HASH_SIZE> in_hash = in_pkt_ctrl.hash;
     ap_uint<HASH_SIZE> out_hash = dummy_hash_iter(in_hash, in_pkt_ctrl.num_iters);
@@ -152,75 +176,79 @@ void hash_iter_pkts(hls::stream<in_pkt_ctrl_t> &in_pkt_ctrls,
     out_pkt.data(HASH_SIZE - 1, 0) = out_hash;
 
     out_pkts.write(out_pkt);
+    // Make the task available.
+    task_fifo.write(task_index);
 }
 
 void hash_iter_pkts_par(hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR],
-                        hls::stream<xdma_axis_t> out_pkts_par[IN_PKT_PAR]) {
+                        hls::stream<xdma_axis_t> &out_pkts) {
     for (unsigned i = 0; i < IN_PKT_PAR; i++) {
 #pragma HLS unroll
-        hash_iter_pkts(in_pkt_ctrls_par[i], out_pkts_par[i]);
+        hash_iter_pkts(in_pkt_ctrls_par[i], out_pkts, i);
     }
 }
 
-void mux_out_pkts(hls::stream<xdma_axis_t> out_pkts_par[IN_PKT_PAR],
-                  hls::stream<xdma_axis_t> &out_words,
-                  ap_uint<256> *gmem) {
-    ap_uint<1> buffered_pkts[IN_PKT_PAR];
-    for (unsigned i = 0; i < IN_PKT_PAR; i++) {
-#pragma HLS unroll
-        buffered_pkts[i] = 0;
-    }
+// void mux_out_pkts(hls::stream<ap_uint<XDMA_AXIS_WIDTH>> out_pkts_par[IN_PKT_PAR],
+//                   hls::stream<xdma_axis_t> &out_words) {
+//     ap_uint<1> buffered_pkts[IN_PKT_PAR];
+//     for (unsigned i = 0; i < IN_PKT_PAR; i++) {
+// #pragma HLS unroll
+//         buffered_pkts[i] = 0;
+//     }
 
-    for (unsigned i = 0; i < IN_PKT_PAR; i++) {
-#pragma HLS unroll
-        xdma_axis_t out_pkt = out_pkts_par[i].read();
-        if (!out_words.write_nb(out_pkt)) {
-            unsigned offset = i * 2;
-            gmem[offset] = out_pkt.data(511, 256);
-            gmem[offset + 1] = out_pkt.data(255, 0);
-        }
-    }
+//     for (unsigned i = 0; i < IN_PKT_PAR; i++) {
+// #pragma HLS unroll
+//         xdma_axis_t out_pkt;
+//         out_pkt.data = out_pkts_par[i].read();
+//         out_words.write(out_pkt);
+//         // if (!out_words.write_nb(out_pkt)) {
+//         //     unsigned offset = i * 2;
+//         //     gmem[offset] = out_pkt.data(511, 256);
+//         //     gmem[offset + 1] = out_pkt.data(255, 0);
+//         // }
+//     }
 
-    for (unsigned i = 0; i < IN_PKT_PAR; i++) {
-        // Not unrolling the loop because of blocking in `out_words.write`.
-        if (!buffered_pkts[i]) continue;
+//     for (unsigned i = 0; i < IN_PKT_PAR; i++) {
+//         // Not unrolling the loop because of blocking in `out_words.write`.
+//         if (!buffered_pkts[i]) continue;
 
-        unsigned offset = i * 2;
-        xdma_axis_t out_pkt;
-        out_pkt.data(511, 256) = gmem[offset];
-        out_pkt.data(255, 0) = gmem[offset + 1];
-        buffered_pkts[i] = 0;
-        out_words.write(out_pkt);
-    }
-}
+//         unsigned offset = i * 2;
+//         xdma_axis_t out_pkt;
+//         out_pkt.data(511, 256) = gmem[offset];
+//         out_pkt.data(255, 0) = gmem[offset + 1];
+//         buffered_pkts[i] = 0;
+//         out_words.write(out_pkt);
+//     }
+// }
 
 void pkts_dataflow(hls::stream<xdma_axis_t> &in_words,
-                   hls::stream<xdma_axis_t> &out_words,
-                   ap_uint<256> *gmem) {
+                   hls::stream<xdma_axis_t> &out_words) {
     hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR];
 #pragma HLS stream variable=in_pkt_ctrls_par type=fifo depth=4
-    hls::stream<xdma_axis_t> out_pkts_par[IN_PKT_PAR];
-#pragma HLS stream variable=out_pkts_par type=fifo depth=4
-#pragma HLS dataflow
 
+#pragma HLS dataflow
     demux_in_pkts(in_words, in_pkt_ctrls_par);
-    hash_iter_pkts_par(in_pkt_ctrls_par, out_pkts_par);
-    mux_out_pkts(out_pkts_par, out_words, gmem);
+    hash_iter_pkts_par(in_pkt_ctrls_par, out_words);
+    //    mux_out_pkts(out_pkts_par, out_words);
 }
 
 void hashes_iter(hls::stream<xdma_axis_t> &in_words,
-                 hls::stream<xdma_axis_t> &out_words,
-                 ap_uint<256> *gmem) {
+                 hls::stream<xdma_axis_t> &out_words) {
 #pragma HLS interface axis port=in_words
 #pragma HLS interface axis port=out_words
-#pragma HLS interface m_axi port=gmem
 #pragma HLS interface ap_ctrl_none port=return
     // #pragma HLS interface s_axilite port=return bundle=control
 
     // Free-running kernel.
     // while (1) {
-    pkts_dataflow(in_words, out_words, gmem);
+    pkts_dataflow(in_words, out_words);
     // }
 
     // TODO: termination of the output stream
 }
+
+#ifndef __SYNTHESIS__
+bool is_task_fifo_ready() {
+    return task_fifo_ready;
+}
+#endif
