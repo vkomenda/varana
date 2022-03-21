@@ -10,14 +10,16 @@
 #define IN_PKT_SIZE (HASH_SIZE + NUM_ITERS_SIZE)
 // The number of parallel input packets in the processing pipeline. Its product with IN_PKT_SIZE must be
 // evenly divisible by XDMA_AXIS_WIDTH.
-#define IN_PKT_PAR 64
-#define IN_PKT_PAR_BITS 6
+#define IN_PKT_PAR 256
+#define IN_PKT_PAR_BITS 8
 
 typedef ap_axiu<XDMA_AXIS_WIDTH, 0, 0, 0> xdma_axis_t;
 
 extern void hashes_iter(hls::stream<xdma_axis_t> &in_words,
-                        hls::stream<xdma_axis_t> &out_words);
+                        hls::stream<xdma_axis_t> &out_words,
+                        ap_uint<256> *gmem);
 
 #ifndef __SYNTHESIS__
 extern bool is_task_fifo_ready();
+extern int take_task_fifo_head();
 #endif
