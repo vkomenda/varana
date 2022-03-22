@@ -177,18 +177,17 @@ void hash_iter_pkts_par(hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR],
         while (!received && (!num_packets_defined || (num_packets_defined && i < num_packets))) {
             received = in_pkt_ctrls_par[i].read_nb(in_pkt_ctrl);
         }
-        if (!received) {
-            continue;
-        }
+        if (received) {
 #ifndef __SYNTHESIS__
-        std::cout << "hash_iter_pkts_par: i=" << i << ", received=" << received
-                  << ", num_packets_defined=" << num_packets_defined
-                  << ", num_packets=" << num_packets << std::endl;
+            std::cout << "hash_iter_pkts_par: i=" << i << ", received=" << received
+                      << ", num_packets_defined=" << num_packets_defined
+                      << ", num_packets=" << num_packets << std::endl;
 #endif
-        ap_uint<HASH_SIZE> in_hash = in_pkt_ctrl.hash;
-        ap_uint<HASH_SIZE> out_hash = dummy_hash_iter(in_hash, in_pkt_ctrl.num_iters);
+            ap_uint<HASH_SIZE> in_hash = in_pkt_ctrl.hash;
+            ap_uint<HASH_SIZE> out_hash = dummy_hash_iter(in_hash, in_pkt_ctrl.num_iters);
 
-        gmem[i] = out_hash;
+            gmem[i] = out_hash;
+        }
     }
 }
 
