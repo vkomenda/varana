@@ -242,6 +242,8 @@ void hashes_iter(hls::stream<xdma_axis_t> &in_words,
 #pragma HLS interface ap_ctrl_none port=return
 // #pragma HLS interface s_axilite port=return bundle=control
 #pragma HLS interface m_axi port=gmem
+#pragma HLS stream variable=in_words type=fifo depth=1024
+#pragma HLS stream variable=out_words type=fifo depth=1024
 
     num_packets = 0;
     num_packets_defined = false;
