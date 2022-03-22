@@ -63,6 +63,11 @@ typedef struct {
 //     return v;
 // }
 
+// Cannot return this value from a DATAFLOW function - a constraint of Vitis. Have to keep it
+// global.
+unsigned num_packets;
+bool num_packets_defined;
+
 ap_uint<HASH_SIZE> dummy_hash_iter(ap_uint<HASH_SIZE> hash, ap_uint<NUM_ITERS_SIZE> num_iters) {
 #ifndef __SYNTHESIS__
     std::cout << "dummy_hash_iter("
@@ -82,7 +87,9 @@ in_pkt_ctrl_t to_in_pkt_ctrl(in_pkt_t &in_pkt) {
     return in_pkt_ctrl;
 }
 
-void submit_pkt(hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR], in_pkt_t &in_pkt, unsigned seq_index) {
+void submit_pkt(hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR],
+                in_pkt_t &in_pkt,
+                unsigned seq_index) {
     // unsigned task_index;
     // if (task_fifo_ready) {
     //     task_index = task_fifo.read();
@@ -92,11 +99,10 @@ void submit_pkt(hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR], in_pkt_
     in_pkt_ctrls_par[seq_index].write(to_in_pkt_ctrl(in_pkt));
 }
 
-unsigned demux_in_pkts(hls::stream<xdma_axis_t> &in_words,
-                       hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR]) {
+void demux_in_pkts(hls::stream<xdma_axis_t> &in_words,
+                   hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR]) {
     xdma_axis_t word;
     bool last = false;
-    unsigned num_packets = 0;
 
     // Iterate over maximum IN_PKT_PAR packets in 8-packet batches, terminating on a batch boundary,
     // which limits the number of termination condition checks within a batch to just one.
@@ -158,31 +164,23 @@ unsigned demux_in_pkts(hls::stream<xdma_axis_t> &in_words,
 
         num_packets += 8;
     }
-
-    return num_packets;
-}
-
-void hash_iter_pkts(hls::stream<in_pkt_ctrl_t> &in_pkt_ctrls,
-                    ap_uint<256> *gmem,
-                    unsigned task_index) {
-    in_pkt_ctrl_t in_pkt_ctrl = in_pkt_ctrls.read();
-    ap_uint<HASH_SIZE> in_hash = in_pkt_ctrl.hash;
-    ap_uint<HASH_SIZE> out_hash = dummy_hash_iter(in_hash, in_pkt_ctrl.num_iters);
-
-    gmem[task_index * HASH_SIZE] = out_hash;
-    // xdma_axis_t out_pkt;
-    // out_pkt.data(XDMA_AXIS_WIDTH - 1, HASH_SIZE) = in_hash;
-    // out_pkt.data(HASH_SIZE - 1, 0) = out_hash;
-    // out_pkts.write(out_pkt);
-    // Make the task available.
-    // task_fifo.write(task_index);
+    num_packets_defined = true;
 }
 
 void hash_iter_pkts_par(hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR],
                         ap_uint<256> *gmem) {
     for (unsigned i = 0; i < IN_PKT_PAR; i++) {
 #pragma HLS unroll
-        hash_iter_pkts(in_pkt_ctrls_par[i], gmem, i);
+        in_pkt_ctrl_t in_pkt_ctrl;
+        bool received = false;
+        // Read only the computed outputs and nothing more.
+        while (!received && (!num_packets_defined || (num_packets_defined && i < num_packets))) {
+            received = in_pkt_ctrls_par[i].read_nb(in_pkt_ctrl);
+        }
+        ap_uint<HASH_SIZE> in_hash = in_pkt_ctrl.hash;
+        ap_uint<HASH_SIZE> out_hash = dummy_hash_iter(in_hash, in_pkt_ctrl.num_iters);
+
+        gmem[i] = out_hash;
     }
 }
 
@@ -219,20 +217,14 @@ void hash_iter_pkts_par(hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR],
 //     }
 // }
 
-unsigned pkts_dataflow(hls::stream<xdma_axis_t> &in_words,
-                       hls::stream<xdma_axis_t> &out_words,
-                       ap_uint<256> *gmem) {
+void pkts_dataflow(hls::stream<xdma_axis_t> &in_words, ap_uint<256> *gmem) {
     hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR];
-    unsigned num_packets;
-
-#pragma HLS stream variable=in_pkt_ctrls_par type=fifo depth=4
+#pragma HLS stream variable=in_pkt_ctrls_par type=fifo depth=1
 
 #pragma HLS dataflow
-    num_packets = demux_in_pkts(in_words, in_pkt_ctrls_par);
+    demux_in_pkts(in_words, in_pkt_ctrls_par);
     hash_iter_pkts_par(in_pkt_ctrls_par, gmem);
     //    mux_out_pkts(out_pkts_par, out_words);
-
-    return num_packets;
 }
 
 void hashes_iter(hls::stream<xdma_axis_t> &in_words,
@@ -244,13 +236,18 @@ void hashes_iter(hls::stream<xdma_axis_t> &in_words,
 // #pragma HLS interface s_axilite port=return bundle=control
 #pragma HLS interface m_axi port=gmem
 
-    pkts_dataflow(in_words, out_words, gmem);
+    num_packets = 0;
+    num_packets_defined = false;
+    pkts_dataflow(in_words, gmem);
 
-    for (unsigned i = 0; i < IN_PKT_PAR; i++) {
-        unsigned offset = i * HASH_SIZE;
+#ifndef __SYNTHESIS__
+    std::cout << "num_packets = " << num_packets << std::endl;
+#endif
+
+    for (unsigned i = 0; i < num_packets; i += 2) {
         xdma_axis_t out_pkt;
-        out_pkt.data(511, 256) = gmem[offset];
-        out_pkt.data(255, 0) = gmem[offset + 1];
+        out_pkt.data(511, 256) = gmem[i];
+        out_pkt.data(255, 0) = gmem[i + 1];
         out_words.write(out_pkt);
     }
 }
