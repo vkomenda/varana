@@ -6,6 +6,7 @@ open_project ${name} -reset
 
 add_files ../include/${name}.h
 add_files ../src/${name}/${name}.cpp -cflags "-I../include/"
+add_files ../src/sha256/sha256.cpp -cflags "-I../include/"
 add_files -tb ../src/${name}/${name}_tb.cpp -cflags "-I../include/"
 
 set_top ${name}

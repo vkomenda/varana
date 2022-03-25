@@ -64,18 +64,18 @@ typedef struct {
 // }
 
 // Cannot return this value from a DATAFLOW function - a constraint of Vitis. Have to keep it
-// global.
+ // global.
 unsigned num_packets;
 bool num_packets_defined;
 
-ap_uint<HASH_SIZE> dummy_hash_iter(ap_uint<HASH_SIZE> hash, ap_uint<NUM_ITERS_SIZE> num_iters) {
+ap_uint<HASH_SIZE> sha256_hash_iter(ap_uint<HASH_SIZE> hash, ap_uint<NUM_ITERS_SIZE> num_iters) {
 #ifndef __SYNTHESIS__
-    std::cout << "dummy_hash_iter("
+    std::cout << "sha256_hash_iter("
               << hash.to_string(16, true).c_str() << ", "
               << num_iters.to_string(16, true).c_str() << ")" << std::endl;
 #endif
     for (unsigned i = 0; i < num_iters; i++) {
-        hash = hash + hash;
+        hash = sha256(hash);
     }
     return hash;
 }
@@ -184,7 +184,7 @@ void hash_iter_pkts_par(hls::stream<in_pkt_ctrl_t> in_pkt_ctrls_par[IN_PKT_PAR],
                       << ", num_packets=" << num_packets << std::endl;
 #endif
             ap_uint<HASH_SIZE> in_hash = in_pkt_ctrl.hash;
-            ap_uint<HASH_SIZE> out_hash = dummy_hash_iter(in_hash, in_pkt_ctrl.num_iters);
+            ap_uint<HASH_SIZE> out_hash = sha256_hash_iter(in_hash, in_pkt_ctrl.num_iters);
 
             gmem[i] = out_hash;
         }
@@ -242,8 +242,6 @@ void hashes_iter(hls::stream<xdma_axis_t> &in_words,
 #pragma HLS interface ap_ctrl_none port=return
 // #pragma HLS interface s_axilite port=return bundle=control
 #pragma HLS interface m_axi port=gmem
-#pragma HLS stream variable=in_words type=fifo depth=1024
-#pragma HLS stream variable=out_words type=fifo depth=1024
 
     num_packets = 0;
     num_packets_defined = false;

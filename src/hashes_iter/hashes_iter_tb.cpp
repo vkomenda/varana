@@ -1,4 +1,5 @@
 #include "hashes_iter.h"
+#include "sha256.h"
 
 #define NUM_PKTS 128
 #define IN_PKTS_SIZE (NUM_PKTS * IN_PKT_SIZE)
@@ -128,10 +129,10 @@ int test_hashes_iter() {
         ap_uint<256> expected_hash1 = start_hash1;
         ap_uint<256> expected_hash2 = start_hash2;
         for (unsigned j = 0; j < i; j++) {
-            expected_hash1 = expected_hash1 + expected_hash1;
-            expected_hash2 = expected_hash2 + expected_hash2;
+            expected_hash1 = sha256(expected_hash1);
+            expected_hash2 = sha256(expected_hash2);
         }
-        expected_hash2 = expected_hash2 + expected_hash2;
+        expected_hash2 = sha256(expected_hash2);
 
         xdma_axis_t word = out_words.read();
         ap_uint<256> hash1 = word.data(511, 256);
