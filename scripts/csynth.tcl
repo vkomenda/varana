@@ -18,7 +18,7 @@ set_directive_interface -mode ap_ctrl_none ${name}
 config_dataflow -default_channel fifo -fifo_depth 16
 config_compile -pipeline_style frp
 config_compile -pragma_strict_mode
-config_rtl -reset none
+config_rtl -reset control
 
 csim_design
 csynth_design

@@ -37,6 +37,7 @@ add_executable(
   hashes_iter_test
   ./test/hashes_iter_test.cpp
   ./src/hashes_iter/hashes_iter.cpp
+  ./src/sha256/sha256.cpp
 )
 
 target_link_libraries(
@@ -66,3 +67,4 @@ endfunction()
 
 add_vitis_hls_target(sha256 ${FREQ} ${SYNTH_DIRECTIVE})
 add_vitis_hls_target(hashes_iter ${FREQ} ${SYNTH_DIRECTIVE})
+add_vitis_hls_target(poh ${FREQ} ${SYNTH_DIRECTIVE})
