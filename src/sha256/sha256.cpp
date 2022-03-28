@@ -1,6 +1,6 @@
 #include <ap_int.h>
 
-/* Various logic functions */
+// Various logic functions
 #define Ch(x,y,z)       (z ^ (x & (y ^ z)))
 #define Maj(x,y,z)      (((x | y) & z) | (x & y))
 #define S(x, n)         rotr((x), (n))
@@ -97,7 +97,6 @@ static state_t compress_round(state_t state, ap_uint<32> rk, ap_uint<32> rw) {
 
 // Computes the digest of a 256-bit message padded to 512 bits.
 static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
-#pragma HLS pipeline ii=1
     ap_uint<32> w[64];
 
 #pragma HLS array_partition variable=w complete
@@ -150,6 +149,7 @@ static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
     return (state.a, state.b, state.c, state.d, state.e, state.f, state.g, state.h);
 }
 
+// Top function. Computes and returns the SHA-256 hash of the input 256-bit msg.
 ap_uint<256> sha256(ap_uint<256> msg) {
     ap_uint<256> padded_msg = pad_message(msg);
     return process_sha256(padded_msg);

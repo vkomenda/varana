@@ -1,7 +1,7 @@
 #include "poh.h"
 
-#define MAX_NUM_HASHES 4194304  // 1 GB worth of input hashes + 256 MB worth of num_iters + 1 GB worth of output hashes
-#define BATCH_NUM_HASHES 128    // Reads of input hashes and num_iters are aligned to the 4 KB boundary
+// #define MAX_NUM_HASHES 4194304  // 1 GB worth of input hashes + 256 MB worth of num_iters + 1 GB worth of output hashes
+#define BATCH_NUM_HASHES 256   // Reads of input hashes and num_iters are aligned to the 4 KB boundary
 
 void poh(const ap_uint<256> *in_hashes, // input hashes
          const ap_uint<64> *num_iters,  // input numbers of iterations for each input hash
@@ -17,9 +17,9 @@ void poh(const ap_uint<256> *in_hashes, // input hashes
 #pragma HLS interface s_axilite port=num_hashes bundle=control
 #pragma HLS interface s_axilite port=return bundle=control
 
-    if (num_hashes > MAX_NUM_HASHES) {
-        return;
-    }
+    // if (num_hashes > MAX_NUM_HASHES) {
+    //     return;
+    // }
 
     ap_uint<256> in_hashes_batch[BATCH_NUM_HASHES];
     ap_uint<64> num_iters_batch[BATCH_NUM_HASHES];

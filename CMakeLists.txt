@@ -55,6 +55,7 @@ gtest_discover_tests(sha256_test)
 gtest_discover_tests(hashes_iter_test)
 
 set(FREQ 250)
+set(HI_FREQ 450)
 set(SYNTH_DIRECTIVE areaoptimized_high)
 # set(PAR_HASHES 1024)
 
@@ -68,3 +69,4 @@ endfunction()
 add_vitis_hls_target(sha256 ${FREQ} ${SYNTH_DIRECTIVE})
 add_vitis_hls_target(hashes_iter ${FREQ} ${SYNTH_DIRECTIVE})
 add_vitis_hls_target(poh ${FREQ} ${SYNTH_DIRECTIVE})
+add_vitis_hls_target(poh ${HI_FREQ} ${SYNTH_DIRECTIVE})
