@@ -25,18 +25,17 @@ int test_poh() {
     for (unsigned i = 0; i < NUM_HASHES; i++) {
         ap_uint<256> start_hash = in_hashes[i];
         ap_uint<256> expected_hash = start_hash;
-        ap_uint<256> step;
         for (unsigned j = 0; j < i; j++) {
-            ap_uint<256> step = sha256(expected_hash);
-            expected_hash = step;
+            expected_hash = sha256(expected_hash);
         }
 
-        std::cout << out_hashes[i].to_string(16, true).c_str() << std::endl;
-        std::cout << expected_hash.to_string(16, true).c_str() << std::endl;
+        std::cout << "got      " << out_hashes[i].to_string(16, true).c_str() << std::endl;
+        std::cout << "expected " << expected_hash.to_string(16, true).c_str() << std::endl;
         if (out_hashes[i] != expected_hash) {
             return 1;
         }
     }
+    std::cout << "Success!" << std::endl;
     return 0;
 }
 
