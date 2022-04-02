@@ -1,21 +1,16 @@
 #include "poh.h"
 
-#define NUM_HASHES 4
+#define NUM_HASHES (BATCH_NUM_HASHES / 2 + BATCH_NUM_HASHES)
 
 int test_poh() {
-    ap_uint<256> in_hashes[BATCH_NUM_HASHES], out_hashes[BATCH_NUM_HASHES];
-    ap_uint<64> num_iters[BATCH_NUM_HASHES];
+    ap_uint<256> in_hashes[NUM_HASHES], out_hashes[NUM_HASHES];
+    ap_uint<64> num_iters[NUM_HASHES];
     unsigned i;
 
     // Initialize inputs.
     for (i = 0; i < NUM_HASHES; i++) {
         in_hashes[i] = ap_uint<256>(1);
         num_iters[i] = ap_uint<64>(i);
-    }
-    // Pad unused bytes.
-    for (i = NUM_HASHES; i < BATCH_NUM_HASHES; i++) {
-        in_hashes[i] = ap_uint<256>(0);
-        num_iters[i] = ap_uint<64>(0);
     }
 
     unsigned num_hashes = NUM_HASHES;
@@ -29,8 +24,8 @@ int test_poh() {
             expected_hash = sha256(expected_hash);
         }
 
-        std::cout << "got      " << out_hashes[i].to_string(16, true).c_str() << std::endl;
-        std::cout << "expected " << expected_hash.to_string(16, true).c_str() << std::endl;
+        std::cout << i << ". got      " << out_hashes[i].to_string(16, true).c_str() << std::endl;
+        std::cout << i << ". expected " << expected_hash.to_string(16, true).c_str() << std::endl;
         if (out_hashes[i] != expected_hash) {
             return 1;
         }

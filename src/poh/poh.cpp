@@ -27,7 +27,7 @@ void poh(const ap_uint<256> *in_hashes, // input hashes
         }
 
         for (unsigned j = 0; j < batch_num_hashes; j++) {
-            in_hashes_batch[j] = in_hashes[i * batch_num_hashes + j];
+            in_hashes_batch[j] = in_hashes[i + j];
         }
         for (unsigned j = 0; j < batch_num_hashes; j++) {
             num_iters_batch[j] = num_iters[i + j];
