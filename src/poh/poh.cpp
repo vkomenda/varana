@@ -1,5 +1,15 @@
 #include "poh.h"
 
+ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
+    ap_uint<256> r;
+    for (unsigned i = 0; i < 32; i++) {
+#pragma HLS unroll
+        unsigned char b = n((32 - i) * 8 - 1, (31 - i) * 8);
+        r((i + 1) * 8 - 1, i * 8) = b;
+    }
+    return r;
+}
+
 void poh(const ap_uint<256> *in_hashes, // input hashes
          const ap_uint<64> *num_iters,  // input numbers of iterations for each input hash
          unsigned num_hashes,           // input number of hashes (the number of elements in in_hashes and in num_iters)
@@ -27,7 +37,7 @@ void poh(const ap_uint<256> *in_hashes, // input hashes
         }
 
         for (unsigned j = 0; j < batch_num_hashes; j++) {
-            in_hashes_batch[j] = in_hashes[i + j];
+            in_hashes_batch[j] = reverse_bytes_u256(in_hashes[i + j]);
         }
         for (unsigned j = 0; j < batch_num_hashes; j++) {
             num_iters_batch[j] = num_iters[i + j];
@@ -48,7 +58,7 @@ void poh(const ap_uint<256> *in_hashes, // input hashes
         }
 
         for (unsigned j = 0; j < batch_num_hashes; j++) {
-            out_hashes[i + j] = out_hashes_batch[j];
+            out_hashes[i + j] = reverse_bytes_u256(out_hashes_batch[j]);
 #ifndef __SYNTHESIS__
             std::cout << "out_hashes[" << i + j << "] = "
                       << out_hashes[i + j].to_string(16, true).c_str() << std::endl;
