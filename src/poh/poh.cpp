@@ -44,13 +44,6 @@ ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
     return r;
 }
 
-void reverse_bytes_u256_array(ap_uint<256> *arr, unsigned len) {
-    for (unsigned i = 0; i < len; i++) {
-        arr[i] = reverse_bytes_u256(arr[i]);
-    }
-
-}
-
 void poh(const ap_uint<256> *in_hashes, // input hashes
          const ap_uint<64> *num_iters,  // input numbers of iterations for each input hash
          unsigned num_hashes,           // input number of hashes (the number of elements in in_hashes and in num_iters)
@@ -84,25 +77,21 @@ void poh(const ap_uint<256> *in_hashes, // input hashes
             num_iters_batch[j] = num_iters[i + j];
         }
 
-        // Big-endian -> little-endian
-        reverse_bytes_u256_array(in_hashes_batch, batch_num_hashes);
-
         // Iterate a constant number of times in order to fully unroll this loop.
         for (unsigned j = 0; j < BATCH_NUM_HASHES; j++) {
 #pragma HLS unroll
             if (!tail_batch || j < batch_num_hashes) {
-                ap_uint<256> out_hash = in_hashes_batch[j];
+                // Big-endian -> little-endian
+                ap_uint<256> out_hash = reverse_bytes_u256(in_hashes_batch[j]);
                 ap_uint<64> num_iters_j = num_iters_batch[j];
 
                 for (unsigned k = 0; k < num_iters_j; k++) {
                     out_hash = sha256(out_hash);
                 }
-                out_hashes_batch[j] = out_hash;
+                // Little-endian -> big-endian
+                out_hashes_batch[j] = reverse_bytes_u256(out_hash);
             }
         }
-
-        // Little-endian -> big-endian
-        reverse_bytes_u256_array(out_hashes_batch, batch_num_hashes);
 
         for (unsigned j = 0; j < batch_num_hashes; j++) {
             out_hashes[i + j] = out_hashes_batch[j];

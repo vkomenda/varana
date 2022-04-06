@@ -22,7 +22,7 @@ config_rtl -reset control
 csim_design
 csynth_design
 # Uncomment when the top function is called in the test.
-# cosim_design
+cosim_design
 
 close_solution
 close_project

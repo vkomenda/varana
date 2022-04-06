@@ -1,14 +1,14 @@
 #include <ap_int.h>
 
 // Various logic functions
-#define Ch(x,y,z)       (z ^ (x & (y ^ z)))
-#define Maj(x,y,z)      (((x | y) & z) | (x & y))
-#define S(x, n)         rotr((x), (n))
-#define R(x, n)         (((x) & 0xFFFFFFFFUL) >> (n))
-#define Sigma0(x)       (S(x, 2) ^ S(x, 13) ^ S(x, 22))
-#define Sigma1(x)       (S(x, 6) ^ S(x, 11) ^ S(x, 25))
-#define Gamma0(x)       (S(x, 7) ^ S(x, 18) ^ R(x, 3))
-#define Gamma1(x)       (S(x, 17) ^ S(x, 19) ^ R(x, 10))
+// #define Ch(x,y,z)       (z ^ (x & (y ^ z)))
+// #define Maj(x,y,z)      (((x | y) & z) | (x & y))
+#define Ch(x, y, z)     (((x) & (y)) ^ (~(x) & (z)))
+#define Maj(x, y, z)    (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
+#define Sigma0(x)       (rotr(x, 2) ^ rotr(x, 13) ^ rotr(x, 22))
+#define Sigma1(x)       (rotr(x, 6) ^ rotr(x, 11) ^ rotr(x, 25))
+#define Gamma0(x)       (rotr(x, 7) ^ rotr(x, 18) ^ ((x) >> 3))
+#define Gamma1(x)       (rotr(x, 17) ^ rotr(x, 19) ^ ((x) >> 10))
 
 using state_t = struct state_t {
     ap_uint<32> a;
