@@ -2,7 +2,7 @@
 #include <ap_int.h>
 #include "sha256.h"
 
-#define BATCH_NUM_HASHES 960   // Reads of input hashes and num_iters are aligned to the 4 KB boundary
+#define BATCH_NUM_HASHES 864   // Reads of input hashes and num_iters are aligned to the 4 KB boundary
 
 ap_uint<256> reverse_bytes_u256(ap_uint<256> n);
 

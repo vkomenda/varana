@@ -98,8 +98,8 @@ static state_t compress_round(state_t state, ap_uint<32> rk, ap_uint<32> rw) {
 // Computes the digest of a 256-bit message padded to 512 bits.
 static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
     ap_uint<32> w[64];
-
 #pragma HLS array_partition variable=w complete
+
     w[0] = padded_msg(511, 480);
     w[1] = padded_msg(479, 448);
     w[2] = padded_msg(447, 416);
