@@ -117,6 +117,7 @@ static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
     w[14] = padded_msg(63, 32);
     w[15] = padded_msg(31, 0);
 
+ loop_apply_gammas:
     for (int i = 16; i < 64; i++) {
         ap_uint<32> gamma0 = Gamma0(w[i - 15]);
         ap_uint<32> gamma1 = Gamma1(w[i - 2]);
@@ -133,6 +134,7 @@ static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
     state.g = H[6];
     state.h = H[7];
 
+ loop_apply_compress_round:
     for (int i = 0; i < 64; i++) {
         state = compress_round(state, K[i], w[i]);
     }
