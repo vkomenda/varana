@@ -12,15 +12,15 @@ int test_poh() {
     ap_uint<256> in_hashes[NUM_HASHES], out_hashes[NUM_HASHES];
     ap_uint<64> num_iters[NUM_HASHES];
 
-    ap_uint<256> expected_hash = reverse_bytes_u256(sha256(reverse_bytes_u256(IN_HASH)));
-    if (expected_hash != OUT_HASH) {
+    ap_uint<256> expected_hash = sha256(reverse_bytes_u256(IN_HASH));
+    if (expected_hash != reverse_bytes_u256(OUT_HASH)) {
         std::cout << "sha256 error" << std::endl;
         return 1;
     }
 
     // Initialize inputs.
     for (unsigned i = 0; i < NUM_HASHES; i++) {
-        in_hashes[i] = IN_HASH;
+        in_hashes[i] = reverse_bytes_u256(IN_HASH);
         num_iters[i] = ap_uint<64>(1);
     }
 
@@ -32,7 +32,7 @@ int test_poh() {
         ap_uint<256> out_hash = out_hashes[i];
         std::cout << i << ". got      " << out_hash.to_string(16, true).c_str() << std::endl;
         std::cout << i << ". expected " << expected_hash.to_string(16, true).c_str() << std::endl;
-        if (out_hash != OUT_HASH) {
+        if (out_hash != reverse_bytes_u256(OUT_HASH)) {
             return 1;
         }
     }

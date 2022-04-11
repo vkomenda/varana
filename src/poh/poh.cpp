@@ -1,5 +1,6 @@
 #include "poh.h"
 
+#ifndef __SYNTHESIS__
 ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
     ap_uint<256> r;
     r(255, 248) = n(7, 0);
@@ -43,13 +44,14 @@ ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
 
     return r;
 }
+#endif
 
-void reverse_bytes_u256_array(ap_uint<256> *arr, unsigned len) {
- loop_reverse_hash_bytes:
-    for (unsigned i = 0; i < len; i++) {
-        arr[i] = reverse_bytes_u256(arr[i]);
-    }
-}
+// void reverse_bytes_u256_array(ap_uint<256> *arr, unsigned len) {
+//  loop_reverse_hash_bytes:
+//     for (unsigned i = 0; i < len; i++) {
+//         arr[i] = reverse_bytes_u256(arr[i]);
+//     }
+// }
 
 void poh(const ap_uint<256> *in_hashes, // input hashes
          const ap_uint<64> *num_iters,  // input numbers of iterations for each input hash
@@ -89,8 +91,8 @@ void poh(const ap_uint<256> *in_hashes, // input hashes
             num_iters_batch[j] = num_iters[i + j];
         }
 
-        // Big-endian -> little-endian
-        reverse_bytes_u256_array(in_hashes_batch, batch_num_hashes);
+        // // Big-endian -> little-endian
+        // reverse_bytes_u256_array(in_hashes_batch, batch_num_hashes);
 
         // Iterate a constant number of times in order to fully unroll this loop.
         for (unsigned j = 0; j < BATCH_NUM_HASHES; j++) {
@@ -106,8 +108,8 @@ void poh(const ap_uint<256> *in_hashes, // input hashes
             }
         }
 
-        // Little-endian -> big-endian
-        reverse_bytes_u256_array(out_hashes_batch, batch_num_hashes);
+        // // Little-endian -> big-endian
+        // reverse_bytes_u256_array(out_hashes_batch, batch_num_hashes);
 
         for (unsigned j = 0; j < batch_num_hashes; j++) {
             out_hashes[i + j] = out_hashes_batch[j];
