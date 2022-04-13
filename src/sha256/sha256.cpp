@@ -67,6 +67,8 @@ static ap_uint<512> pad_message(ap_uint<256> msg) {
 
 // Performs one round of SHA-256 compression.
 static state_t compress_round(state_t state, ap_uint<32> rk, ap_uint<32> rw) {
+#pragma HLS bind_op variable=rk op=add impl=dsp
+#pragma HLS bind_op variable=rw op=add impl=dsp
     ap_uint<32> a = state.a;
     ap_uint<32> b = state.b;
     ap_uint<32> c = state.c;
@@ -75,13 +77,20 @@ static state_t compress_round(state_t state, ap_uint<32> rk, ap_uint<32> rw) {
     ap_uint<32> f = state.f;
     ap_uint<32> g = state.g;
     ap_uint<32> h = state.h;
+#pragma HLS bind_op variable=h op=add impl=dsp
 
     ap_uint<32> sigma1 = Sigma1(e);
+#pragma HLS bind_op variable=sigma1 op=add impl=dsp
     ap_uint<32> ch = Ch(e, f, g);
+#pragma HLS bind_op variable=ch op=add impl=dsp
     ap_uint<32> tmp1 = h + sigma1 + ch + rk + rw;
+#pragma HLS bind_op variable=tmp1 op=add impl=dsp
     ap_uint<32> sigma0 = Sigma0(a);
+#pragma HLS bind_op variable=sigma0 op=add impl=dsp
     ap_uint<32> maj = Maj(a, b, c);
+#pragma HLS bind_op variable=maj op=add impl=dsp
     ap_uint<32> tmp2 = sigma0 + maj;
+#pragma HLS bind_op variable=tmp2 op=add impl=dsp
 
     state.h = g;
     state.g = f;
@@ -99,6 +108,7 @@ static state_t compress_round(state_t state, ap_uint<32> rk, ap_uint<32> rw) {
 static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
     ap_uint<32> w[64];
 #pragma HLS array_partition variable=w complete
+#pragma HLS bind_op variable=w op=add impl=dsp
 
     w[0] = padded_msg(511, 480);
     w[1] = padded_msg(479, 448);
@@ -119,8 +129,11 @@ static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
 
  loop_apply_gammas:
     for (int i = 16; i < 64; i++) {
+#pragma HLS bind_op variable=i op=sub impl=dsp
         ap_uint<32> gamma0 = Gamma0(w[i - 15]);
         ap_uint<32> gamma1 = Gamma1(w[i - 2]);
+#pragma HLS bind_op variable=gamma0 op=add impl=dsp
+#pragma HLS bind_op variable=gamma1 op=add impl=dsp
         w[i] = w[i - 16] + gamma0 + w[i - 7] + gamma1;
     }
 
