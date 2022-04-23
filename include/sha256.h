@@ -1,4 +1,4 @@
 #pragma once
 #include <ap_int.h>
 
-ap_uint<256> sha256(ap_uint<256> msg);
+void sha256(ap_uint<256> msg[1], ap_uint<256> result[1]);

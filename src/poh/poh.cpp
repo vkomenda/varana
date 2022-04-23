@@ -56,9 +56,9 @@ void poh(const ap_uint<256> *in_hashes, // input hashes
          unsigned num_hashes,           // input number of hashes (the number of elements in in_hashes and in num_iters)
          ap_uint<256> *out_hashes       // output hashes
 ) {
-#pragma HLS interface m_axi port=in_hashes bundle=gmem
-#pragma HLS interface m_axi port=num_iters bundle=gmem
-#pragma HLS interface m_axi port=out_hashes bundle=gmem
+#pragma HLS interface m_axi port=in_hashes bundle=gmem max_read_burst_length=640
+#pragma HLS interface m_axi port=num_iters bundle=gmem max_read_burst_length=640
+#pragma HLS interface m_axi port=out_hashes bundle=gmem max_write_burst_length=640
 #pragma HLS interface s_axilite port=in_hashes bundle=control
 #pragma HLS interface s_axilite port=num_iters bundle=control
 #pragma HLS interface s_axilite port=out_hashes bundle=control
@@ -100,10 +100,15 @@ void poh(const ap_uint<256> *in_hashes, // input hashes
             if (!tail_batch || j < batch_num_hashes) {
                 ap_uint<256> out_hash = in_hashes_batch[j];
                 ap_uint<64> num_iters_j = num_iters_batch[j];
+                // FIFOs for communication with the SHA-256 kernel.
+                ap_uint<256> msg[1];
+                ap_uint<256> result[1];
 
             loop_apply_hash:
                 for (unsigned k = 0; k < num_iters_j; k++) {
-                    out_hash = sha256(out_hash);
+                    msg[0] = out_hash;
+                    sha256(msg, result);
+                    out_hash = result[0];
                 }
                 out_hashes_batch[j] = out_hash;
             }

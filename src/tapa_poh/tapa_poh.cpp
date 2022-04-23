@@ -1,8 +1,7 @@
 #include <ap_int.h>
+#include <cstdint>
+#include <tapa.h>
 
-// Various logic functions
-// #define Ch(x,y,z)       (z ^ (x & (y ^ z)))
-// #define Maj(x,y,z)      (((x | y) & z) | (x & y))
 #define Ch(x, y, z)     (((x) & (y)) ^ (~(x) & (z)))
 #define Maj(x, y, z)    (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
 #define Sigma0(x)       (rotr(x, 2) ^ rotr(x, 13) ^ rotr(x, 22))
@@ -166,9 +165,121 @@ static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
 }
 
 // Top function. Computes and returns the SHA-256 hash of the input 256-bit msg.
-void sha256(ap_uint<256> msg[1], ap_uint<256> result[1]) {
-#pragma HLS INTERFACE mode=ap_fifo port=msg
-#pragma HLS INTERFACE mode=ap_fifo port=result
-    ap_uint<512> padded_msg = pad_message(msg[0]);
-    result[0] = process_sha256(padded_msg);
+ap_uint<256> sha256(ap_uint<256> msg) {
+    ap_uint<512> padded_msg = pad_message(msg);
+    return process_sha256(padded_msg);
+}
+
+#define TAPA_WHILE_NEITHER_EOT_UNROLL(fifo1, fifo2)                     \
+    for (bool tapa_##fifo1##_valid, tapa_##fifo2##_valid;               \
+         (!fifo1.eot(tapa_##fifo1##_valid) || !tapa_##fifo1##_valid) && \
+         (!fifo2.eot(tapa_##fifo2##_valid) || !tapa_##fifo2##_valid);)  \
+    _Pragma("HLS unroll factor=512")                                    \
+    _Pragma("HLS pipeline II = 1") if (tapa_##fifo1##_valid &&          \
+                                       tapa_##fifo2##_valid)
+
+constexpr int FIFO_DEPTH = 16;
+
+// template<typename T>
+// void load_inner(tapa::async_mmap<const T>& in_mmap,
+//                 uint32_t len,
+//                 tapa::ostream<T>& in_stream) {
+//     for (uint64_t i = 0, n_elem = 0; n_elem < len;) {
+//         T elem;
+
+//         if (i < len && in_mmap.read_addr.try_write(i)) {
+//             i++;
+//         }
+//         if (in_mmap.read_data.try_read(elem)) {
+//             in_stream.write(elem);
+//             n_elem++;
+//         }
+//     }
+//     in_stream.close();
+// }
+
+void load_hashes(tapa::async_mmap<ap_uint<256>>& in_mmap,
+                 uint32_t len,
+                 tapa::ostream<ap_uint<256>>& in_stream) {
+    for (uint64_t i = 0, n_elem = 0; n_elem < len;) {
+        ap_uint<256> elem;
+
+        if (i < len && in_mmap.read_addr.try_write(i)) {
+            i++;
+        }
+        if (in_mmap.read_data.try_read(elem)) {
+            in_stream.write(elem);
+            n_elem++;
+        }
+    }
+    in_stream.close();
+}
+
+void load_iters(tapa::async_mmap<uint64_t>& in_mmap,
+                uint32_t len,
+                tapa::ostream<uint64_t>& in_stream) {
+    for (uint64_t i = 0, n_elem = 0; n_elem < len;) {
+        uint64_t elem;
+
+        if (i < len && in_mmap.read_addr.try_write(i)) {
+            i++;
+        }
+        if (in_mmap.read_data.try_read(elem)) {
+            in_stream.write(elem);
+            n_elem++;
+        }
+    }
+    in_stream.close();
+}
+
+void compute(tapa::istream<ap_uint<256>>& in_hashes,
+             tapa::istream<uint64_t>& num_iters,
+             tapa::ostream<ap_uint<256>>& out_stream) {
+    uint64_t num_iter;
+    bool in_hash_success = false;
+    bool num_iter_success = false;
+
+    TAPA_WHILE_NEITHER_EOT_UNROLL(in_hashes, num_iters) {
+        ap_uint<256> in_hash;
+
+        if (!in_hash_success) {
+            in_hash = in_hashes.read(in_hash_success);
+        }
+        if (!num_iter_success) {
+            num_iter = num_iters.read(num_iter_success);
+        }
+        if (in_hash_success && num_iter_success) {
+            ap_uint<256> out_hash = sha256(in_hash);
+            // TODO: computation
+            out_stream.write(out_hash);
+            in_hash_success = false;
+            num_iter_success = false;
+        }
+    }
+    // TODO: flush non-EOTed streams?
+}
+
+void store(tapa::istream<ap_uint<256>>& out_stream,
+           tapa::mmap<ap_uint<256>> out_hashes) {
+    uint64_t i = 0;
+
+    TAPA_WHILE_NOT_EOT(out_stream) {
+        out_hashes[i] = out_stream.read();
+        i++;
+    }
+}
+
+void poh(tapa::mmap<ap_uint<256>> in_hashes,
+         tapa::mmap<uint64_t> num_iters,
+         uint32_t num_hashes,
+         tapa::mmap<ap_uint<256>> out_hashes) {
+    tapa::stream<ap_uint<256>, FIFO_DEPTH> in_hashes_stream("in_hashes_stream");
+    tapa::stream<uint64_t, FIFO_DEPTH> num_iters_stream("num_iters_stream");
+    tapa::stream<ap_uint<256>, FIFO_DEPTH> out_stream("out_stream");
+
+    tapa::task()
+        .invoke(load_hashes, in_hashes, num_hashes, in_hashes_stream)
+        .invoke(load_iters, num_iters, num_hashes, num_iters_stream)
+        .invoke(compute, in_hashes_stream, num_iters_stream, out_stream)
+        .invoke(store, out_stream, out_hashes);
 }

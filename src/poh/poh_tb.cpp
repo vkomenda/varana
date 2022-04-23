@@ -11,8 +11,11 @@ const ap_uint<256> OUT_HASH =
 int test_poh() {
     ap_uint<256> in_hashes[NUM_HASHES], out_hashes[NUM_HASHES];
     ap_uint<64> num_iters[NUM_HASHES];
+    ap_uint<256> msg[1] = reverse_bytes_u256(IN_HASH);
+    ap_uint<256> result[1];
 
-    ap_uint<256> expected_hash = reverse_bytes_u256(sha256(reverse_bytes_u256(IN_HASH)));
+    sha256(msg, result);
+    ap_uint<256> expected_hash = reverse_bytes_u256(result[0]);
     if (expected_hash != OUT_HASH) {
         std::cout << "sha256 error" << std::endl;
         return 1;
