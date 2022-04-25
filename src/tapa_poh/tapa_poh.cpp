@@ -179,6 +179,7 @@ ap_uint<256> sha256(ap_uint<256> msg) {
                                        tapa_##fifo2##_valid)
 
 constexpr int FIFO_DEPTH = 16;
+constexpr int NK = 256;
 
 // template<typename T>
 // void load_inner(tapa::async_mmap<const T>& in_mmap,
@@ -200,7 +201,7 @@ constexpr int FIFO_DEPTH = 16;
 
 void load_hashes(tapa::async_mmap<ap_uint<256>>& in_mmap,
                  uint32_t len,
-                 tapa::ostream<ap_uint<256>>& in_stream) {
+                 tapa::ostreams<ap_uint<256>, NK>& in_qs) {
     for (uint64_t i = 0, n_elem = 0; n_elem < len;) {
         ap_uint<256> elem;
 
@@ -208,16 +209,18 @@ void load_hashes(tapa::async_mmap<ap_uint<256>>& in_mmap,
             i++;
         }
         if (in_mmap.read_data.try_read(elem)) {
-            in_stream.write(elem);
+            in_qs[i % NK].write(elem);
             n_elem++;
         }
     }
-    in_stream.close();
+    for (uint32_t i = 0; i < NK; i++) {
+        in_qs[i].close();
+    }
 }
 
 void load_iters(tapa::async_mmap<uint64_t>& in_mmap,
                 uint32_t len,
-                tapa::ostream<uint64_t>& in_stream) {
+                tapa::ostreams<uint64_t, NK>& in_qs) {
     for (uint64_t i = 0, n_elem = 0; n_elem < len;) {
         uint64_t elem;
 
@@ -225,11 +228,13 @@ void load_iters(tapa::async_mmap<uint64_t>& in_mmap,
             i++;
         }
         if (in_mmap.read_data.try_read(elem)) {
-            in_stream.write(elem);
+            in_qs[i % NK].write(elem);
             n_elem++;
         }
     }
-    in_stream.close();
+    for (uint32_t i = 0; i < NK; i++) {
+        in_qs[i].close();
+    }
 }
 
 void compute(tapa::istream<ap_uint<256>>& in_hashes,
@@ -259,13 +264,15 @@ void compute(tapa::istream<ap_uint<256>>& in_hashes,
     // TODO: flush non-EOTed streams?
 }
 
-void store(tapa::istream<ap_uint<256>>& out_stream,
-           tapa::mmap<ap_uint<256>> out_hashes) {
-    uint64_t i = 0;
-
-    TAPA_WHILE_NOT_EOT(out_stream) {
-        out_hashes[i] = out_stream.read();
-        i++;
+void store(tapa::istreams<ap_uint<256>, NK>& out_q,
+           tapa::mmap<ap_uint<256>> out_hashes,
+           uint64_t n_kernel) {
+    for (uint64_t i = 0; i < NK; i++) {
+        uint64_t j = 0;
+        TAPA_WHILE_NOT_EOT(out_q[i]) {
+            out_hashes[i + j * NK] = out_q.read();
+            j++;
+        }
     }
 }
 
@@ -273,13 +280,13 @@ void poh(tapa::mmap<ap_uint<256>> in_hashes,
          tapa::mmap<uint64_t> num_iters,
          uint32_t num_hashes,
          tapa::mmap<ap_uint<256>> out_hashes) {
-    tapa::stream<ap_uint<256>, FIFO_DEPTH> in_hashes_stream("in_hashes_stream");
-    tapa::stream<uint64_t, FIFO_DEPTH> num_iters_stream("num_iters_stream");
-    tapa::stream<ap_uint<256>, FIFO_DEPTH> out_stream("out_stream");
+    tapa::streams<ap_uint<256>, NK, FIFO_DEPTH> in_hashes_qs("in_hashes_qs");
+    tapa::streams<uint64_t, NK, FIFO_DEPTH> num_iters_qs("num_iters_qs");
+    tapa::streams<ap_uint<256>, NK, FIFO_DEPTH> out_qs("out_qs");
 
     tapa::task()
-        .invoke(load_hashes, in_hashes, num_hashes, in_hashes_stream)
-        .invoke(load_iters, num_iters, num_hashes, num_iters_stream)
-        .invoke(compute, in_hashes_stream, num_iters_stream, out_stream)
-        .invoke(store, out_stream, out_hashes);
+        .invoke(load_hashes, in_hashes, num_hashes, in_hashes_qs)
+        .invoke(load_iters, num_iters, num_hashes, num_iters_qs)
+        .invoke(compute, in_hashes_qs, num_iters_qs, out_qs)
+        .invoke(store, out_qs, out_hashes);
 }
