@@ -296,6 +296,7 @@ void compute_kernel(tapa::istream<ap_uint<256>>& in_hashes,
             num_iter_success = false;
         }
     }
+    out_q.close();
 }
 
 void compute(tapa::istreams<ap_uint<256>, NK>& in_hashes_qs,
