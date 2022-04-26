@@ -170,38 +170,66 @@ ap_uint<256> sha256(ap_uint<256> msg) {
     return process_sha256(padded_msg);
 }
 
-#define TAPA_WHILE_NEITHER_EOT_UNROLL(fifo1, fifo2)                     \
+#define TAPA_WHILE_NEITHER_EOT_UNROLL(fifo1, fifo2, nk)                 \
     for (bool tapa_##fifo1##_valid, tapa_##fifo2##_valid;               \
          (!fifo1.eot(tapa_##fifo1##_valid) || !tapa_##fifo1##_valid) && \
          (!fifo2.eot(tapa_##fifo2##_valid) || !tapa_##fifo2##_valid);)  \
-    _Pragma("HLS unroll factor=512")                                    \
+    _Pragma("HLS unroll factor=##nk##")                                 \
     _Pragma("HLS pipeline II = 1") if (tapa_##fifo1##_valid &&          \
                                        tapa_##fifo2##_valid)
 
 constexpr int FIFO_DEPTH = 16;
-constexpr int NK = 256;
+// Number of hash kernels.
+constexpr int NK = 128;
 
-// template<typename T>
-// void load_inner(tapa::async_mmap<const T>& in_mmap,
-//                 uint32_t len,
-//                 tapa::ostream<T>& in_stream) {
-//     for (uint64_t i = 0, n_elem = 0; n_elem < len;) {
-//         T elem;
+ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
+#pragma HLS inline
+    ap_uint<256> r;
+    r(255, 248) = n(7, 0);
+    r(247, 240) = n(15, 8);
+    r(239, 232) = n(23, 16);
+    r(231, 224) = n(31, 24);
+    r(223, 216) = n(39, 32);
+    r(215, 208) = n(47, 40);
+    r(207, 200) = n(55, 48);
+    r(199, 192) = n(63, 56);
+    r(191, 184) = n(71, 64);
+    r(183, 176) = n(79, 72);
+    r(175, 168) = n(87, 80);
+    r(167, 160) = n(95, 88);
+    r(159, 152) = n(103, 96);
+    r(151, 144) = n(111, 104);
+    r(143, 136) = n(119, 112);
+    r(135, 128) = n(127, 120);
+    r(127, 120) = n(135, 128);
+    r(119, 112) = n(143, 136);
+    r(111, 104) = n(151, 144);
+    r(103, 96) = n(159, 152);
+    r(95, 88) = n(167, 160);
+    r(87, 80) = n(175, 168);
+    r(79, 72) = n(183, 176);
+    r(71, 64) = n(191, 184);
+    r(63, 56) = n(199, 192);
+    r(55, 48) = n(207, 200);
+    r(47, 40) = n(215, 208);
+    r(39, 32) = n(223, 216);
+    r(31, 24) = n(231, 224);
+    r(23, 16) = n(239, 232);
+    r(15, 8) = n(247, 240);
+    r(7, 0) = n(255, 248);
 
-//         if (i < len && in_mmap.read_addr.try_write(i)) {
-//             i++;
-//         }
-//         if (in_mmap.read_data.try_read(elem)) {
-//             in_stream.write(elem);
-//             n_elem++;
-//         }
+//     for (unsigned i = 0; i < 32; i++) {
+// #pragma HLS unroll
+//         unsigned char b = n((32 - i) * 8 - 1, (31 - i) * 8);
+//         r((i + 1) * 8 - 1, i * 8) = b;
 //     }
-//     in_stream.close();
-// }
+
+    return r;
+}
 
 void load_hashes(tapa::async_mmap<ap_uint<256>>& in_mmap,
                  uint32_t len,
-                 tapa::ostreams<ap_uint<256>, NK>& in_qs) {
+                 tapa::ostreams<ap_uint<256>, NK> in_qs) {
     for (uint64_t i = 0, n_elem = 0; n_elem < len;) {
         ap_uint<256> elem;
 
@@ -213,14 +241,15 @@ void load_hashes(tapa::async_mmap<ap_uint<256>>& in_mmap,
             n_elem++;
         }
     }
-    for (uint32_t i = 0; i < NK; i++) {
+
+    for (uint64_t i = 0; i < NK; i++) {
         in_qs[i].close();
     }
 }
 
 void load_iters(tapa::async_mmap<uint64_t>& in_mmap,
                 uint32_t len,
-                tapa::ostreams<uint64_t, NK>& in_qs) {
+                tapa::ostreams<uint64_t, NK> in_qs) {
     for (uint64_t i = 0, n_elem = 0; n_elem < len;) {
         uint64_t elem;
 
@@ -232,21 +261,23 @@ void load_iters(tapa::async_mmap<uint64_t>& in_mmap,
             n_elem++;
         }
     }
-    for (uint32_t i = 0; i < NK; i++) {
+
+    for (uint64_t i = 0; i < NK; i++) {
         in_qs[i].close();
     }
 }
 
-void compute(tapa::istream<ap_uint<256>>& in_hashes,
-             tapa::istream<uint64_t>& num_iters,
-             tapa::ostream<ap_uint<256>>& out_stream) {
-    uint64_t num_iter;
+void compute_kernel(tapa::istream<ap_uint<256>>& in_hashes,
+                    tapa::istream<uint64_t>& num_iters,
+                    tapa::ostream<ap_uint<256>> out_q) {
     bool in_hash_success = false;
     bool num_iter_success = false;
+    ap_uint<256> in_hash;
+    uint64_t num_iter;
 
-    TAPA_WHILE_NEITHER_EOT_UNROLL(in_hashes, num_iters) {
-        ap_uint<256> in_hash;
-
+    TAPA_WHILE_NEITHER_EOT(in_hashes, num_iters) {
+        // Reads of in_hashes and num_iters happen in parallel. Any failing reads will be retried
+        // until both reads are successful. Only then the hash function is applied.
         if (!in_hash_success) {
             in_hash = in_hashes.read(in_hash_success);
         }
@@ -254,24 +285,35 @@ void compute(tapa::istream<ap_uint<256>>& in_hashes,
             num_iter = num_iters.read(num_iter_success);
         }
         if (in_hash_success && num_iter_success) {
-            ap_uint<256> out_hash = sha256(in_hash);
-            // TODO: computation
-            out_stream.write(out_hash);
+            ap_uint<256> out_hash = reverse_bytes_u256(in_hash);
+
+        loop_apply_hash:
+            for (uint64_t i = 0; i < num_iter; i++) {
+                out_hash = sha256(out_hash);
+            }
+            out_q.write(reverse_bytes_u256(out_hash));
             in_hash_success = false;
             num_iter_success = false;
         }
     }
-    // TODO: flush non-EOTed streams?
 }
 
-void store(tapa::istreams<ap_uint<256>, NK>& out_q,
-           tapa::mmap<ap_uint<256>> out_hashes,
-           uint64_t n_kernel) {
+void compute(tapa::istreams<ap_uint<256>, NK>& in_hashes_qs,
+             tapa::istreams<uint64_t, NK>& num_iters_qs,
+             tapa::ostreams<ap_uint<256>, NK>& out_qs) {
+    tapa::task().invoke<tapa::detach, NK>(compute_kernel, in_hashes_qs, num_iters_qs, out_qs);
+}
+
+void store(tapa::istreams<ap_uint<256>, NK>& out_qs,
+           tapa::mmap<ap_uint<256>> out_hashes) {
     for (uint64_t i = 0; i < NK; i++) {
         uint64_t j = 0;
-        TAPA_WHILE_NOT_EOT(out_q[i]) {
-            out_hashes[i + j * NK] = out_q.read();
-            j++;
+        for (bool q_valid; !out_qs[i].eot(q_valid) || !q_valid;) {
+#pragma HLS pipeline II = 1
+            if (q_valid) {
+                out_hashes[i + j * NK] = out_qs[i].read();
+                j++;
+            }
         }
     }
 }
