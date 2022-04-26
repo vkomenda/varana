@@ -267,42 +267,42 @@ void load_iters(tapa::async_mmap<uint64_t>& in_mmap,
     }
 }
 
-void compute_kernel(tapa::istream<ap_uint<256>>& in_hashes,
+void compute_kernel(tapa::istream<ap_uint<256>>& hashes,
                     tapa::istream<uint64_t>& num_iters,
-                    tapa::ostream<ap_uint<256>> out_q) {
-    bool in_hash_success = false;
+                    tapa::ostream<ap_uint<256>> results) {
+    bool hash_success = false;
     bool num_iter_success = false;
-    ap_uint<256> in_hash;
+    ap_uint<256> hash;
     uint64_t num_iter;
 
-    TAPA_WHILE_NEITHER_EOT(in_hashes, num_iters) {
+    TAPA_WHILE_NEITHER_EOT(hashes, num_iters) {
         // Reads of in_hashes and num_iters happen in parallel. Any failing reads will be retried
         // until both reads are successful. Only then the hash function is applied.
-        if (!in_hash_success) {
-            in_hash = in_hashes.read(in_hash_success);
+        if (!hash_success) {
+            hash = hashes.read(hash_success);
         }
         if (!num_iter_success) {
             num_iter = num_iters.read(num_iter_success);
         }
-        if (in_hash_success && num_iter_success) {
-            ap_uint<256> out_hash = reverse_bytes_u256(in_hash);
+        if (hash_success && num_iter_success) {
+            ap_uint<256> h = reverse_bytes_u256(hash);
 
         loop_apply_hash:
             for (uint64_t i = 0; i < num_iter; i++) {
-                out_hash = sha256(out_hash);
+                h = sha256(h);
             }
-            out_q.write(reverse_bytes_u256(out_hash));
-            in_hash_success = false;
+            results.write(reverse_bytes_u256(h));
+            hash_success = false;
             num_iter_success = false;
         }
     }
-    out_q.close();
+    results.close();
 }
 
-void compute(tapa::istreams<ap_uint<256>, NK>& in_hashes_qs,
+void compute(tapa::istreams<ap_uint<256>, NK>& hashes_qs,
              tapa::istreams<uint64_t, NK>& num_iters_qs,
-             tapa::ostreams<ap_uint<256>, NK>& out_qs) {
-    tapa::task().invoke<tapa::detach, NK>(compute_kernel, in_hashes_qs, num_iters_qs, out_qs);
+             tapa::ostreams<ap_uint<256>, NK>& results_qs) {
+    tapa::task().invoke<tapa::detach, NK>(compute_kernel, hashes_qs, num_iters_qs, results_qs);
 }
 
 void store(tapa::istreams<ap_uint<256>, NK>& out_qs,
