@@ -164,7 +164,7 @@ static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
     return (state.a, state.b, state.c, state.d, state.e, state.f, state.g, state.h);
 }
 
-// Top function. Computes and returns the SHA-256 hash of the input 256-bit msg.
+// Computes and returns the SHA-256 hash of the input 256-bit msg.
 ap_uint<256> sha256(ap_uint<256> msg) {
     ap_uint<512> padded_msg = pad_message(msg);
     return process_sha256(padded_msg);
@@ -269,7 +269,7 @@ void load_iters(tapa::async_mmap<uint64_t>& in_mmap,
 
 void compute_kernel(tapa::istream<ap_uint<256>>& hashes,
                     tapa::istream<uint64_t>& num_iters,
-                    tapa::ostream<ap_uint<256>> results) {
+                    tapa::ostream<ap_uint<256>>& results) {
     bool hash_success = false;
     bool num_iter_success = false;
     ap_uint<256> hash;
@@ -302,7 +302,7 @@ void compute_kernel(tapa::istream<ap_uint<256>>& hashes,
 void compute(tapa::istreams<ap_uint<256>, NK>& hashes_qs,
              tapa::istreams<uint64_t, NK>& num_iters_qs,
              tapa::ostreams<ap_uint<256>, NK>& results_qs) {
-    tapa::task().invoke<tapa::detach, NK>(compute_kernel, hashes_qs, num_iters_qs, results_qs);
+    tapa::task().invoke<tapa::join, NK>(compute_kernel, hashes_qs, num_iters_qs, results_qs);
 }
 
 void store(tapa::istreams<ap_uint<256>, NK>& out_qs,
