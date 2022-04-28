@@ -2,9 +2,9 @@
 #include <iostream>
 #include <vector>
 
-#include <ap_int.h>
 #include <gflags/gflags.h>
-#include <tapa.h>
+
+#include "tapa-poh.h"
 
 using std::clog;
 using std::endl;
@@ -32,14 +32,19 @@ int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     const uint32_t n = argc > 1 ? atoll(argv[1]) : DEFAULT_NUM_HASHES;
+    // The size of `results` must allow for extra padding to batches of NK elements.
+    const uint32_t n_results = ((n + NK - 1) / NK) * NK;
 
     vector<ap_uint<256>> hashes(n);
     vector<uint64_t> num_iters(n);
-    vector<ap_uint<256>> results(n);
+    vector<ap_uint<256>> results(n_results);
 
     for (uint32_t i = 0; i < n; i++) {
         hashes[i] = IN_HASH;
         num_iters[i] = i;
+    }
+    for (uint32_t i = 0; i < n_results; i++) {
+        results[i] = 0;
     }
 
     auto start = high_resolution_clock::now();
@@ -73,7 +78,8 @@ int main(int argc, char* argv[]) {
         }
         if (result != expected) {
             num_errors++;
-            clog << "expected: " << expected << ", got: " << result << endl;
+            clog << "expected: " << expected.to_string(16, true)
+                 << ", got: " << result.to_string(16, true) << endl;
             if (num_errors >= error_threshold) {
                 clog << "too many errors..." << endl;
                 break;

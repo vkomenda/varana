@@ -1,6 +1,4 @@
-#include <ap_int.h>
-#include <cstdint>
-#include <tapa.h>
+#include "tapa-poh.h"
 
 #define Ch(x, y, z)     (((x) & (y)) ^ (~(x) & (z)))
 #define Maj(x, y, z)    (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
@@ -179,8 +177,6 @@ ap_uint<256> sha256(ap_uint<256> msg) {
                                        tapa_##fifo2##_valid)
 
 constexpr int FIFO_DEPTH = 16;
-// Number of hash kernels.
-constexpr int NK = 128;
 
 ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
 #pragma HLS inline
@@ -230,14 +226,18 @@ ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
 void load_hashes(tapa::async_mmap<ap_uint<256>>& in_mmap,
                  uint32_t len,
                  tapa::ostreams<ap_uint<256>, NK> in_qs) {
-    for (uint64_t i = 0, n_elem = 0; n_elem < len;) {
+    for (uint64_t i = 0, iq = 0, n_elem = 0; n_elem < len;) {
         ap_uint<256> elem;
 
         if (i < len && in_mmap.read_addr.try_write(i)) {
             i++;
+            iq = i % NK;
+#ifndef __SYNTHESIS__
+            std::clog << "load_hashes i,iq = " << i << "," << iq << std::endl;
+#endif
         }
         if (in_mmap.read_data.try_read(elem)) {
-            in_qs[i % NK].write(elem);
+            in_qs[iq].write(elem);
             n_elem++;
         }
     }
@@ -250,14 +250,18 @@ void load_hashes(tapa::async_mmap<ap_uint<256>>& in_mmap,
 void load_iters(tapa::async_mmap<uint64_t>& in_mmap,
                 uint32_t len,
                 tapa::ostreams<uint64_t, NK> in_qs) {
-    for (uint64_t i = 0, n_elem = 0; n_elem < len;) {
+    for (uint64_t i = 0, iq = 0, n_elem = 0; n_elem < len;) {
         uint64_t elem;
 
         if (i < len && in_mmap.read_addr.try_write(i)) {
             i++;
+            iq = i % NK;
+#ifndef __SYNTHESIS__
+            std::clog << "load_iters i,iq = " << i << "," << iq << std::endl;
+#endif
         }
         if (in_mmap.read_data.try_read(elem)) {
-            in_qs[i % NK].write(elem);
+            in_qs[iq].write(elem);
             n_elem++;
         }
     }
@@ -291,7 +295,12 @@ void compute_kernel(tapa::istream<ap_uint<256>>& hashes,
             for (uint64_t i = 0; i < num_iter; i++) {
                 h = sha256(h);
             }
-            results.write(reverse_bytes_u256(h));
+            ap_uint<256> result = reverse_bytes_u256(h);
+#ifndef __SYNTHESIS__
+            std::clog << "compute " << hash.to_string(16, true)
+                      << " -> " << result.to_string(16, true) << std::endl;
+#endif
+            results.write(result);
             hash_success = false;
             num_iter_success = false;
         }
@@ -312,6 +321,9 @@ void store(tapa::istreams<ap_uint<256>, NK>& out_qs,
         for (bool q_valid; !out_qs[i].eot(q_valid) || !q_valid;) {
 #pragma HLS pipeline II = 1
             if (q_valid) {
+#ifndef __SYNTHESIS__
+                std::clog << "store i,j = " << i << "," << j << std::endl;
+#endif
                 out_hashes[i + j * NK] = out_qs[i].read();
                 j++;
             }
