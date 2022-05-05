@@ -71,14 +71,16 @@ int main(int argc, char* argv[]) {
             // Check that a single application of sha256 yields the correct result.
             expected = OUT_HASH;
         } else {
-            expected = OUT_HASH;
+            expected = reverse_bytes_u256(OUT_HASH);
             for (uint64_t j = 1; j < i; j++) {
                 expected = sha256(expected);
             }
+            expected = reverse_bytes_u256(expected);
         }
         if (result != expected) {
             num_errors++;
-            clog << "expected: " << expected.to_string(16, true)
+            clog << "(i = " << i << ") "
+                 << "expected: " << expected.to_string(16, true)
                  << ", got: " << result.to_string(16, true) << endl;
             if (num_errors >= error_threshold) {
                 clog << "too many errors..." << endl;
