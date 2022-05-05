@@ -32,18 +32,16 @@ int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     const uint32_t n = argc > 1 ? atoll(argv[1]) : DEFAULT_NUM_HASHES;
-    // The size of `results` must allow for extra padding to batches of NK elements.
-    const uint32_t n_results = ((n + NK - 1) / NK) * NK;
 
     vector<ap_uint<256>> hashes(n);
     vector<uint64_t> num_iters(n);
-    vector<ap_uint<256>> results(n_results);
+    vector<ap_uint<256>> results(n);
 
     for (uint32_t i = 0; i < n; i++) {
         hashes[i] = IN_HASH;
         num_iters[i] = i;
     }
-    for (uint32_t i = 0; i < n_results; i++) {
+    for (uint32_t i = 0; i < n; i++) {
         results[i] = 0;
     }
 

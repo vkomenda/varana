@@ -304,16 +304,46 @@ void compute(tapa::istreams<ap_uint<256>, NK>& hashes_qs,
 
 void store(tapa::istreams<ap_uint<256>, NK>& out_qs,
            tapa::mmap<ap_uint<256>> out_hashes) {
-    for (uint64_t i = 0; i < NK; i++) {
-        uint64_t j = 0;
-        for (bool q_valid; !out_qs[i].eot(q_valid) || !q_valid;) {
+    // Flags indicating which streams are remaining to be processed.
+    ap_uint<NK> remaining = 0;
+    // Initialise the "remaining elements" status to 1 for every stream.
+    remaining = ~remaining;
+
+    // Sequential storage index.
+    uint64_t m = 0;
+
+    while (remaining != 0) {
+        for (uint64_t i = 0; i < NK; i++) {
 #pragma HLS pipeline II = 1
-            if (q_valid) {
-                out_hashes[i + j * NK] = out_qs[i].read();
-                j++;
+            if (remaining[i] == 1) {
+                bool q_valid = false;
+                bool eot = false;
+                while (!q_valid) {
+                    eot = !out_qs[i].eot(q_valid);
+                }
+                if (eot) {
+                    remaining[i] = 0;
+                } else {
+                    out_hashes[m] = out_qs[i].read();
+                    m++;
+                }
             }
         }
+#ifndef __SYNTHESIS__
+        std::cout << "remaining = " << remaining.to_string(16, true) << std::endl;
+#endif
     }
+
+//     for (uint64_t i = 0; i < NK; i++) {
+//         uint64_t j = 0;
+//         for (bool q_valid; !out_qs[i].eot(q_valid) || !q_valid;) {
+// #pragma HLS pipeline II = 1
+//             if (q_valid) {
+//                 out_hashes[i + j * NK] = out_qs[i].read();
+//                 j++;
+//             }
+//         }
+//     }
 }
 
 void poh(tapa::mmap<ap_uint<256>> in_hashes,
