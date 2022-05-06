@@ -12,7 +12,7 @@ using std::vector;
 using std::chrono::duration;
 using std::chrono::high_resolution_clock;
 
-const uint32_t DEFAULT_NUM_HASHES = 128;
+const uint32_t DEFAULT_NUM_HASHES = 100;
 // Byte-reversed hashes simulating the big-endian storage. Note that ap_uint<256> is little-endian.
 const ap_uint<256> IN_HASH =
     ap_uint<256>("6b54cada05988fef58c0094e96ceee4eb62451c0a791b011e96f0bc81947ba01", 16);

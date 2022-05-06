@@ -105,28 +105,34 @@ static state_t compress_round(state_t state, ap_uint<32> rk, ap_uint<32> rw) {
 // Computes the digest of a 256-bit message padded to 512 bits.
 static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
     ap_uint<32> w[64];
-// #pragma HLS array_partition variable=w complete
+#pragma HLS array_partition variable=w complete
 // #pragma HLS bind_op variable=w op=add impl=dsp
 
-    w[0] = padded_msg(511, 480);
-    w[1] = padded_msg(479, 448);
-    w[2] = padded_msg(447, 416);
-    w[3] = padded_msg(415, 384);
-    w[4] = padded_msg(383, 352);
-    w[5] = padded_msg(351, 320);
-    w[6] = padded_msg(319, 288);
-    w[7] = padded_msg(287, 256);
-    w[8] = padded_msg(255, 224);
-    w[9] = padded_msg(223, 192);
-    w[10] = padded_msg(191, 160);
-    w[11] = padded_msg(159, 128);
-    w[12] = padded_msg(127, 96);
-    w[13] = padded_msg(95, 64);
-    w[14] = padded_msg(63, 32);
-    w[15] = padded_msg(31, 0);
+ loop_message_to_words:
+    for (uint8_t i = 0; i < 16; i++) {
+        // #pragma HLS unroll
+        w[i] = padded_msg((16 - i) * 32 - 1, (15 - i) * 32);
+    }
+
+    // w[0] = padded_msg(511, 480);
+    // w[1] = padded_msg(479, 448);
+    // w[2] = padded_msg(447, 416);
+    // w[3] = padded_msg(415, 384);
+    // w[4] = padded_msg(383, 352);
+    // w[5] = padded_msg(351, 320);
+    // w[6] = padded_msg(319, 288);
+    // w[7] = padded_msg(287, 256);
+    // w[8] = padded_msg(255, 224);
+    // w[9] = padded_msg(223, 192);
+    // w[10] = padded_msg(191, 160);
+    // w[11] = padded_msg(159, 128);
+    // w[12] = padded_msg(127, 96);
+    // w[13] = padded_msg(95, 64);
+    // w[14] = padded_msg(63, 32);
+    // w[15] = padded_msg(31, 0);
 
  loop_apply_gammas:
-    for (int i = 16; i < 64; i++) {
+    for (uint8_t i = 16; i < 64; i++) {
 // #pragma HLS bind_op variable=i op=sub impl=dsp
         ap_uint<32> gamma0 = Gamma0(w[i - 15]);
         ap_uint<32> gamma1 = Gamma1(w[i - 2]);
@@ -146,7 +152,7 @@ static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
     state.h = H[7];
 
  loop_apply_compress_round:
-    for (int i = 0; i < 64; i++) {
+    for (uint8_t i = 0; i < 64; i++) {
         state = compress_round(state, K[i], w[i]);
     }
 
@@ -168,57 +174,49 @@ ap_uint<256> sha256(ap_uint<256> msg) {
     return process_sha256(padded_msg);
 }
 
-#define TAPA_WHILE_NEITHER_EOT_UNROLL(fifo1, fifo2, nk)                 \
-    for (bool tapa_##fifo1##_valid, tapa_##fifo2##_valid;               \
-         (!fifo1.eot(tapa_##fifo1##_valid) || !tapa_##fifo1##_valid) && \
-         (!fifo2.eot(tapa_##fifo2##_valid) || !tapa_##fifo2##_valid);)  \
-    _Pragma("HLS unroll factor=##nk##")                                 \
-    _Pragma("HLS pipeline II = 1") if (tapa_##fifo1##_valid &&          \
-                                       tapa_##fifo2##_valid)
-
 constexpr int FIFO_DEPTH = 16;
 
 ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
 #pragma HLS inline
     ap_uint<256> r;
-    r(255, 248) = n(7, 0);
-    r(247, 240) = n(15, 8);
-    r(239, 232) = n(23, 16);
-    r(231, 224) = n(31, 24);
-    r(223, 216) = n(39, 32);
-    r(215, 208) = n(47, 40);
-    r(207, 200) = n(55, 48);
-    r(199, 192) = n(63, 56);
-    r(191, 184) = n(71, 64);
-    r(183, 176) = n(79, 72);
-    r(175, 168) = n(87, 80);
-    r(167, 160) = n(95, 88);
-    r(159, 152) = n(103, 96);
-    r(151, 144) = n(111, 104);
-    r(143, 136) = n(119, 112);
-    r(135, 128) = n(127, 120);
-    r(127, 120) = n(135, 128);
-    r(119, 112) = n(143, 136);
-    r(111, 104) = n(151, 144);
-    r(103, 96) = n(159, 152);
-    r(95, 88) = n(167, 160);
-    r(87, 80) = n(175, 168);
-    r(79, 72) = n(183, 176);
-    r(71, 64) = n(191, 184);
-    r(63, 56) = n(199, 192);
-    r(55, 48) = n(207, 200);
-    r(47, 40) = n(215, 208);
-    r(39, 32) = n(223, 216);
-    r(31, 24) = n(231, 224);
-    r(23, 16) = n(239, 232);
-    r(15, 8) = n(247, 240);
-    r(7, 0) = n(255, 248);
+    // r(255, 248) = n(7, 0);
+    // r(247, 240) = n(15, 8);
+    // r(239, 232) = n(23, 16);
+    // r(231, 224) = n(31, 24);
+    // r(223, 216) = n(39, 32);
+    // r(215, 208) = n(47, 40);
+    // r(207, 200) = n(55, 48);
+    // r(199, 192) = n(63, 56);
+    // r(191, 184) = n(71, 64);
+    // r(183, 176) = n(79, 72);
+    // r(175, 168) = n(87, 80);
+    // r(167, 160) = n(95, 88);
+    // r(159, 152) = n(103, 96);
+    // r(151, 144) = n(111, 104);
+    // r(143, 136) = n(119, 112);
+    // r(135, 128) = n(127, 120);
+    // r(127, 120) = n(135, 128);
+    // r(119, 112) = n(143, 136);
+    // r(111, 104) = n(151, 144);
+    // r(103, 96) = n(159, 152);
+    // r(95, 88) = n(167, 160);
+    // r(87, 80) = n(175, 168);
+    // r(79, 72) = n(183, 176);
+    // r(71, 64) = n(191, 184);
+    // r(63, 56) = n(199, 192);
+    // r(55, 48) = n(207, 200);
+    // r(47, 40) = n(215, 208);
+    // r(39, 32) = n(223, 216);
+    // r(31, 24) = n(231, 224);
+    // r(23, 16) = n(239, 232);
+    // r(15, 8) = n(247, 240);
+    // r(7, 0) = n(255, 248);
 
-//     for (unsigned i = 0; i < 32; i++) {
-// #pragma HLS unroll
-//         unsigned char b = n((32 - i) * 8 - 1, (31 - i) * 8);
-//         r((i + 1) * 8 - 1, i * 8) = b;
-//     }
+    for (uint8_t i = 0; i < 32; i++) {
+        // #pragma HLS unroll
+        uint8_t b = n((32 - i) * 8 - 1, (31 - i) * 8);
+        r((i + 1) * 8 - 1, i * 8) = b;
+    }
 
     return r;
 }
@@ -307,7 +305,7 @@ void store(tapa::istreams<ap_uint<256>, NK>& out_qs,
     // Flags indicating which streams are remaining to be processed.
     ap_uint<NK> remaining = 0;
     // Initialise the "remaining elements" status to 1 for every stream.
-    remaining = ~remaining;
+    remaining.b_not();
 
     // Sequential storage index.
     uint64_t m = 0;
@@ -319,7 +317,7 @@ void store(tapa::istreams<ap_uint<256>, NK>& out_qs,
                 bool q_valid = false;
                 bool eot = false;
                 while (!q_valid) {
-                    eot = !out_qs[i].eot(q_valid);
+                    eot = out_qs[i].eot(q_valid);
                 }
                 if (eot) {
                     remaining[i] = 0;
@@ -329,21 +327,7 @@ void store(tapa::istreams<ap_uint<256>, NK>& out_qs,
                 }
             }
         }
-#ifndef __SYNTHESIS__
-        std::cout << "remaining = " << remaining.to_string(16, true) << std::endl;
-#endif
     }
-
-//     for (uint64_t i = 0; i < NK; i++) {
-//         uint64_t j = 0;
-//         for (bool q_valid; !out_qs[i].eot(q_valid) || !q_valid;) {
-// #pragma HLS pipeline II = 1
-//             if (q_valid) {
-//                 out_hashes[i + j * NK] = out_qs[i].read();
-//                 j++;
-//             }
-//         }
-//     }
 }
 
 void poh(tapa::mmap<ap_uint<256>> in_hashes,
