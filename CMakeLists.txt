@@ -54,7 +54,7 @@ include(GoogleTest)
 gtest_discover_tests(sha256_test)
 gtest_discover_tests(hashes_iter_test)
 
-set(FREQ 450)
+set(FREQ 500)
 
 function(add_vitis_hls_target name freq)
   add_custom_command(OUTPUT ${name}/${name}_f${freq}/syn/report/csynth.rpt COMMAND vitis_hls -f ../scripts/csynth.tcl ${name} ${freq})

@@ -56,7 +56,7 @@ ap_uint<S> rotr(ap_uint<S> x, int n) {
     return tmp;
 }
 
-static ap_uint<512> pad_message(ap_uint<256> msg) {
+ap_uint<512> pad_message(ap_uint<256> msg) {
 #pragma HLS INLINE
     ap_uint<512> tmp;
     tmp(511, 256) = msg;
@@ -67,7 +67,7 @@ static ap_uint<512> pad_message(ap_uint<256> msg) {
 }
 
 // Performs one round of SHA-256 compression.
-static state_t compress_round(state_t state, ap_uint<32> rk, ap_uint<32> rw) {
+state_t compress_round(state_t state, ap_uint<32> rk, ap_uint<32> rw) {
 // #pragma HLS bind_op variable=rk op=add impl=dsp
 // #pragma HLS bind_op variable=rw op=add impl=dsp
     ap_uint<32> a = state.a;
@@ -106,7 +106,7 @@ static state_t compress_round(state_t state, ap_uint<32> rk, ap_uint<32> rw) {
 }
 
 // Computes the digest of a 256-bit message padded to 512 bits.
-static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
+ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
     ap_uint<32> w[64];
 // #pragma HLS array_partition variable=w complete
 // #pragma HLS bind_op variable=w op=add impl=dsp
@@ -166,9 +166,8 @@ static ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
 }
 
 // Top function. Computes and returns the SHA-256 hash of the input 256-bit msg.
-void sha256(ap_uint<256> msg[1], ap_uint<256> result[1]) {
-#pragma HLS INTERFACE mode=ap_fifo port=msg
-#pragma HLS INTERFACE mode=ap_fifo port=result
-    ap_uint<512> padded_msg = pad_message(msg[0]);
-    result[0] = process_sha256(padded_msg);
+ap_uint<256> sha256(ap_uint<256> msg) {
+#pragma HLS interface mode=ap_ctrl_none port=return
+    ap_uint<512> padded_msg = pad_message(msg);
+    return process_sha256(padded_msg);
 }
