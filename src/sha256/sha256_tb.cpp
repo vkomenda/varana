@@ -8,7 +8,7 @@ int test_sha256() {
     ap_uint<256> expected_hash(EXPECTED_HASH, 16);
 
     std::cout << "Starting the core..." << std::endl;
-    ap_uint<256> out_hash = sha256(in_hash);
+    ap_uint<256> out_hash = sha256(in_hash, 1);
     if (out_hash != expected_hash) {
         std::cout << "out_hash = " << out_hash.to_string(16, true).c_str() << std::endl;
         return 1;

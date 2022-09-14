@@ -1,4 +1,5 @@
 #include <ap_int.h>
+#include <cstdint>
 
 // Various logic functions
 // #define Ch(x,y,z)       (z ^ (x & (y ^ z)))
@@ -165,7 +166,7 @@ ap_uint<512> process_sha256(ap_uint<512> padded_msg) {
     return (state.a, state.b, state.c, state.d, state.e, state.f, state.g, state.h);
 }
 
-// Top function. Computes and returns the SHA-256 hash of the input 256-bit msg.
+// Top function. Computes and returns the n-th SHA-256 hash of the input 256-bit msg.
 ap_uint<256> sha256(ap_uint<256> msg) {
 #pragma HLS interface mode=ap_ctrl_none port=return
     ap_uint<512> padded_msg = pad_message(msg);
