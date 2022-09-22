@@ -1,7 +1,7 @@
 #include "sha256-axi.h"
 #include "sha256.cpp"
 
-constexpr int FIFO_DEPTH = 2;
+constexpr int FIFO_DEPTH = 4;
 
 ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
 #pragma HLS inline
