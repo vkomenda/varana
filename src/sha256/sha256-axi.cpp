@@ -1,7 +1,9 @@
+#include <cassert>
+
 #include "sha256-axi.h"
 #include "sha256.cpp"
 
-constexpr int FIFO_DEPTH = 4;
+constexpr int FIFO_DEPTH = 2;
 
 ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
 #pragma HLS inline
@@ -40,7 +42,7 @@ ap_uint<256> reverse_bytes_u256(ap_uint<256> n) {
     // r(7, 0) = n(255, 248);
 
     for (uint8_t i = 0; i < 32; i++) {
-        // #pragma HLS unroll
+#pragma HLS unroll
         uint8_t b = n((32 - i) * 8 - 1, (31 - i) * 8);
         r((i + 1) * 8 - 1, i * 8) = b;
     }
@@ -115,6 +117,10 @@ void compute(tapa::istream<ap_uint<256>>& hashes,
         }
     }
     results.close();
+
+    // Clear the eot tokens.
+    hashes.open();
+    num_iters.open();
 }
 
 void store(tapa::istream<ap_uint<256>>& q,
@@ -126,6 +132,9 @@ void store(tapa::istream<ap_uint<256>>& q,
         hashes[m] = q.read();
         m++;
     }
+
+    // Clear the eot token.
+    q.open();
 }
 
 void sha256_axi(tapa::mmap<ap_uint<256>> in_hashes,
